@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+    <title>Mareo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      main {
+        display: grid;
+        justify-items: center;
+        gap: 18px;
+      }
+
+      .spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-top-color: CanvasText;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+
+      p {
+        margin: 0;
+        font-size: 14px;
+        opacity: 0.72;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Starting Mareo…</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "mareo",
+  "productName": "Mareo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mareo desktop host for DeepSeek Harness",
+  "main": "dist/src/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "stage:runtime": "node scripts/stage-runtime.mjs",
+    "verify:runtime": "node scripts/verify-runtime.mjs .staging",
+    "start": "npm run build && npm run stage:runtime && electron-forge start",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "make": "npm run build && npm run stage:runtime && electron-forge make --arch=arm64",
+    "verify:package": "node scripts/verify-runtime.mjs out/Mareo-darwin-arm64/Mareo.app/Contents/Resources"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-dmg": "7.11.2",
+    "@types/node": "26.4.1",
+    "electron": "44.2.0",
+    "typescript": "7.0.2"
+  }
+}
