@@ -54,7 +54,7 @@ out/make/Mareo-0.1.0-arm64.dmg
 
 The V0 DMG is unsigned and is intended only for internal testing.
 
-The desktop brand is `Mareo`, with bundle ID `app.mareo.desktop`. The application icon, Dock icon, and startup page use `assets/logo-white.png`, an exact white-background composite of the original `assets/logo.png`. When the original changes, run `python3 scripts/flatten-logo.py` (requires Pillow) and commit both images. Normal development and packaging use the committed image and do not require Python. Forge generates the macOS application icon automatically using `sips` and `iconutil`. The existing `Mareo` user-data directory is retained so branding changes do not reset settings or conversations. DSH's own UI and published dependency remain unmodified.
+The desktop brand is `Mareo`, with bundle ID `app.mareo.desktop`. The application and Dock use `assets/app-icon.png`: the original logo on a white rounded plate, with transparent margins and a subtle shadow. The startup page independently uses `assets/logo-white.png`, a white-background composite. Neither asset redraws the original `assets/logo.png`. When the original changes, run `python3 scripts/compose-app-icon.py` and `python3 scripts/flatten-logo.py` (requires Pillow), then commit the original and generated images. Normal development and packaging use the committed images and do not require Python. Forge generates the macOS application icon automatically using `sips` and `iconutil`. The existing `Mareo` user-data directory is retained so branding changes do not reset settings or conversations. DSH's own UI and published dependency remain unmodified.
 
 ## Runtime boundary
 

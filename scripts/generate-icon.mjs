@@ -11,7 +11,7 @@ for (const size of [16, 32, 128, 256, 512]) {
   for (const scale of [1, 2]) {
     execFileSync('/usr/bin/sips', [
       '-z', String(size * scale), String(size * scale),
-      path.join(root, 'assets', 'logo-white.png'),
+      path.join(root, 'assets', 'app-icon.png'),
       '--out', path.join(iconset, `icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`),
     ])
   }

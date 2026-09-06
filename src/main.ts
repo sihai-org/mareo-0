@@ -36,7 +36,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function startMareo(): Promise<void> {
-  app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'logo-white.png'))
+  app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'app-icon.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
   mainWindow = new BrowserWindow({
