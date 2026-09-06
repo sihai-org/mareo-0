@@ -7,6 +7,8 @@ let dshRuntime: DshRuntime | undefined
 let shutdownComplete = false
 
 app.setName('Mareo')
+// Keep existing installations' data independent of the display name.
+app.setPath('userData', path.join(app.getPath('appData'), 'Mareo'))
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -34,6 +36,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function startMareo(): Promise<void> {
+  app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'logo-white.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
   mainWindow = new BrowserWindow({

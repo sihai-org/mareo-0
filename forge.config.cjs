@@ -5,6 +5,7 @@ const path = require('node:path')
 module.exports = {
   packagerConfig: {
     name: 'Mareo',
+    icon: path.join(__dirname, '.cache', 'icons', 'mareo.icns'),
     appBundleId: 'app.mareo.desktop',
     appCategoryType: 'public.app-category.productivity',
     asar: true,
@@ -33,6 +34,9 @@ module.exports = {
     },
   ],
   hooks: {
+    generateAssets: async () => {
+      execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'generate-icon.mjs')])
+    },
     postPackage: async (_forgeConfig, { platform, outputPaths }) => {
       if (platform !== 'darwin') return
       const unusedPermissions = [
