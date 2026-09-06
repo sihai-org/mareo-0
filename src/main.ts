@@ -16,7 +16,7 @@ let shutdownComplete = false
 // not quit merely because all (gate) windows closed on a successful sign-in.
 let signInActive = false
 
-app.setName('Mareo')
+app.setName("Mareo");
 // Keep existing installations' data independent of the display name.
 app.setPath('userData', path.join(app.getPath('appData'), 'Mareo'))
 
@@ -58,7 +58,7 @@ async function startMareo(): Promise<void> {
   }
 
   mainWindow = new BrowserWindow({
-    title: 'Mareo',
+    title: "Mareo",
     width: 1280,
     height: 820,
     minWidth: 900,
@@ -70,10 +70,10 @@ async function startMareo(): Promise<void> {
       sandbox: true,
       webSecurity: true,
     },
-  })
+  });
   mainWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    mainWindow?.setTitle('Mareo')
+    mainWindow?.setTitle("Mareo");
   })
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   await mainWindow.loadFile(path.join(app.getAppPath(), 'assets', 'startup.html'))
@@ -103,14 +103,14 @@ async function startMareo(): Promise<void> {
       await dshRuntime?.stop()
       dshRuntime = undefined
       const choice = await dialog.showMessageBox(mainWindow, {
-        type: 'error',
-        title: 'Mareo could not start',
-        message: 'DeepSeek Harness failed to start.',
+        type: "error",
+        title: "Mareo could not start",
+        message: "DeepSeek Harness failed to start.",
         detail: error instanceof Error ? error.message : String(error),
-        buttons: ['Retry', 'Quit'],
+        buttons: ["Retry", "Quit"],
         defaultId: 0,
         cancelId: 1,
-      })
+      });
       if (choice.response === 1) {
         app.quit()
         return
@@ -212,16 +212,21 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
 function showUnexpectedExit(message: string): void {
   dshRuntime = undefined
   if (!mainWindow || mainWindow.isDestroyed()) return
-  void dialog.showMessageBox(mainWindow, {
-    type: 'error',
-    title: 'Mareo stopped',
-    message,
-    detail: `The current log is stored at ${path.join(app.getPath('userData'), 'logs', 'mareo.log')}.`,
-    buttons: ['Quit'],
-  }).then(() => app.quit())
+  void dialog
+    .showMessageBox(mainWindow, {
+      type: "error",
+      title: "Mareo stopped",
+      message,
+      detail: `The current log is stored at ${path.join(app.getPath("userData"), "logs", "mareo.log")}.`,
+      buttons: ["Quit"],
+    })
+    .then(() => app.quit());
 }
 
 function showFatalError(error: unknown): void {
-  dialog.showErrorBox('Mareo could not start', error instanceof Error ? error.message : String(error))
+  dialog.showErrorBox(
+    "Mareo could not start",
+    error instanceof Error ? error.message : String(error),
+  );
   app.quit()
 }

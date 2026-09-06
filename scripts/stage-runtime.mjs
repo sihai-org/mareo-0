@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { cp, mkdir, readFile, rename, rm } from 'node:fs/promises'
+import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { get } from 'node:https'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
@@ -27,6 +27,16 @@ await Promise.all([
 ])
 
 await run('npm', ['ci', '--omit=dev'], dshStagingDirectory)
+// Ship our own package alongside npm dependencies; leave all DSH packages intact.
+const brandDirectory = path.join(dshStagingDirectory, 'node_modules', 'mareo-brand')
+await mkdir(brandDirectory, { recursive: true })
+for (const file of ['package.json', 'index.js']) {
+  await cp(path.join(projectDirectory, 'brand', file), path.join(brandDirectory, file))
+}
+const logoUrl = `data:image/png;base64,${(await readFile(path.join(projectDirectory, 'assets', 'logo.png'))).toString('base64')}`
+const brandClient = await readFile(path.join(projectDirectory, 'brand', 'client.cjs'), 'utf8')
+await writeFile(path.join(brandDirectory, 'client.js'),
+  `window.__ModuleLoader__.load({ id: 'mareo-brand', factory: (require) => {\nconst exports = {};\nconst logoUrl = ${JSON.stringify(logoUrl)};\n${brandClient}\nreturn exports;\n} });\n`)
 await stageNodeRuntime(nodeRuntime)
 await run(process.execPath, [path.join(projectDirectory, 'scripts', 'verify-runtime.mjs'), stagingRoot], projectDirectory)
 
