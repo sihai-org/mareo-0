@@ -85,10 +85,10 @@ runtime and its UI stay untouched.
 - An unauthenticated launch shows the sign-in screen (`assets/signin.html`),
   which accepts a gateway token pasted by the user; validation and storage
   happen in the Electron main process.
-- The gateway URL defaults to `http://127.0.0.1:3000` for local development. A
-  distribution build points at the production gateway through the
-  `MAREO_GATEWAY_URL` environment variable (or the `GATEWAY_URL` constant in
-  `src/account.ts`).
+- Packaged builds talk to the production gateway at `https://api.svc.mareo.cn`;
+  running from source (`npm start`) defaults to a local gateway at
+  `http://127.0.0.1:3000`. The `MAREO_GATEWAY_URL` environment variable
+  overrides either default (see the `GATEWAY_URL` constant in `src/account.ts`).
 - The gateway (`server/`) proxies model traffic to DeepSeek with your own API
   key, enforces per-user daily limits, and records one usage row per request.
   Run it locally with `npm run server:start` (after filling `server/.env`) and

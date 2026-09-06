@@ -3,11 +3,12 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 /**
- * The gateway this Mareo build talks to. Local development defaults to a
- * locally running gateway; a distribution build overrides it with the product
- * gateway (for example via MAREO_GATEWAY_URL or a baked-in constant).
+ * The gateway this Mareo talks to. Packaged builds use the production gateway;
+ * local development keeps using a locally running gateway. MAREO_GATEWAY_URL
+ * always wins, so either mode can be pointed anywhere for testing.
  */
-export const GATEWAY_URL = process.env.MAREO_GATEWAY_URL ?? 'http://127.0.0.1:3000'
+export const GATEWAY_URL =
+  process.env.MAREO_GATEWAY_URL ?? (app.isPackaged ? 'https://api.svc.mareo.cn' : 'http://127.0.0.1:3000')
 
 const ACCOUNT_FILE = 'account.dat'
 
