@@ -122,4 +122,30 @@ This phase primarily accomplishes:
 
 # Project-Specific Requirements
 
-- After completing a task, automatically commit the code.
+
+
+## Git Workflow
+
+- Never develop directly on `main`.
+- For each task, create a dedicated branch from `main`.
+- Use branch prefixes such as:
+  - `feat/`
+  - `fix/`
+  - `refactor/`
+  - `chore/`
+  - `docs/`
+- Keep each branch focused on one task.
+- Commit all completed work to the task branch.
+- Automatically commit the code when each work done.
+- Run relevant tests before finishing.
+- Push the branch and create a Pull Request when possible.
+- **Never merge the PR or merge the branch into `main`.**
+- **Never push directly to `main`.**
+- The human user is always responsible for reviewing and merging the PR.
+- If a PR cannot be created, leave the work committed on the branch and report the branch name and suggested PR title/description.
+
+Default flow:
+
+```text
+main → task branch → develop → test → commit → PR → STOP
+```
