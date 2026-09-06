@@ -1,0 +1,21 @@
+{
+  "name": "mareo-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mareo gateway: authenticates Mareo clients and proxies model traffic to DeepSeek with usage accounting",
+  "main": "dist/src/main.js",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && node --env-file-if-exists=.env dist/src/main.js",
+    "issue-token": "npm run build && node --env-file-if-exists=.env dist/src/issue-token.js",
+    "test": "npm run build && node --test dist/test/"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "typescript": "7.0.2"
+  }
+}

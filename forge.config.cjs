@@ -21,6 +21,7 @@ module.exports = {
       /^\/dist\/tests(?:\/|$)/,
       /^\/runtime(?:\/|$)/,
       /^\/scripts(?:\/|$)/,
+      /^\/server(?:\/|$)/,
       /^\/tests(?:\/|$)/,
       /^\/src\/.*\.ts$/,
     ],

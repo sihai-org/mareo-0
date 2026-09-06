@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # Mareo build artifacts
 .staging/
+
+# Mareo gateway runtime data
+server/data/

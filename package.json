@@ -13,7 +13,10 @@
     "test": "npm run build && node --test dist/tests/*.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "make": "npm run build && npm run stage:runtime && electron-forge make --arch=arm64",
-    "verify:package": "node scripts/verify-runtime.mjs out/Mareo-darwin-arm64/Mareo.app/Contents/Resources"
+    "verify:package": "node scripts/verify-runtime.mjs out/Mareo-darwin-arm64/Mareo.app/Contents/Resources",
+    "server:start": "npm --prefix server run start",
+    "server:issue-token": "npm --prefix server run issue-token",
+    "server:test": "npm --prefix server run test"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",
