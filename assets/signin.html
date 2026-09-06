@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'"
+    />
+    <title>Sign in to Mareo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      main {
+        width: 320px;
+        display: grid;
+        justify-items: stretch;
+        gap: 14px;
+        text-align: center;
+      }
+
+      img {
+        justify-self: center;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      p.hint {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        opacity: 0.7;
+      }
+
+      input {
+        padding: 9px 10px;
+        font-size: 13px;
+        border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
+        border-radius: 8px;
+        background: Canvas;
+        color: CanvasText;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      input:focus {
+        outline: 2px solid color-mix(in srgb, CanvasText 45%, transparent);
+        outline-offset: 1px;
+      }
+
+      button {
+        padding: 9px 10px;
+        font-size: 14px;
+        font-weight: 500;
+        border: none;
+        border-radius: 8px;
+        background: CanvasText;
+        color: Canvas;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      p.status {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.4;
+        min-height: 2.6em;
+        white-space: pre-wrap;
+      }
+
+      p.status.error {
+        color: #c0392b;
+      }
+
+      p.status.ok {
+        color: #1e7d32;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="logo-white.png" alt="Mareo" width="72" height="72" />
+      <h1>Sign in to Mareo</h1>
+      <p class="hint">
+        Mareo routes model access through your account. No API keys needed — paste the
+        access token you received.
+      </p>
+      <input id="token" type="password" placeholder="Paste your Mareo access token" autocomplete="off" spellcheck="false" />
+      <button id="sign-in" type="button">Sign in</button>
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script>
+      const input = document.getElementById('token')
+      const button = document.getElementById('sign-in')
+      const status = document.getElementById('status')
+
+      async function submit() {
+        const token = input.value.trim()
+        if (!token) {
+          status.textContent = 'Enter your access token first.'
+          status.className = 'status error'
+          return
+        }
+        button.disabled = true
+        status.textContent = 'Verifying…'
+        status.className = 'status'
+        const result = await window.mareo.signIn(token)
+        if (result.ok) {
+          status.textContent = 'Signed in — starting Mareo…'
+          status.className = 'status ok'
+        } else {
+          status.textContent = result.error ?? 'Sign-in failed.'
+          status.className = 'status error'
+          button.disabled = false
+        }
+      }
+
+      button.addEventListener('click', submit)
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') submit()
+      })
+      input.focus()
+    </script>
+  </body>
+</html>

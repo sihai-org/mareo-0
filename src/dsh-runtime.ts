@@ -19,6 +19,8 @@ interface StartDshRuntimeOptions {
   dshHome: string
   workingDirectory: string
   logFile: string
+  /** Extra environment variables merged over the process environment. */
+  env?: Record<string, string>
   onUnexpectedExit(message: string): void
 }
 
@@ -69,6 +71,7 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
       env: {
         ...process.env,
         DSH_HOME: options.dshHome,
+        ...options.env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
