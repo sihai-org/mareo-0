@@ -35,6 +35,7 @@ npm run typecheck
 npm test
 npm run verify:runtime
 npm run verify:brand
+npm run server:test
 ```
 
 ## Package
@@ -65,6 +66,37 @@ The plugin uses only `sidebar.brand.mark`, `sidebar.brand.name`, `conversation.h
 
 Run `npm run verify:brand` after staging, or `node scripts/verify-brand.mjs "out/Mareo-darwin-arm64/Mareo.app/Contents/Resources"` after packaging. This boots an isolated temporary DSH home and checks authenticated loading and brand composition without an API key. Add `--serve` after the resources path to keep the test instance available for visual checks. When upgrading DSH, also verify sidebar folding, both themes, and attribution placement in the UI.
 
+## Model access and account
+
+End users never configure a DeepSeek API key. Mareo authenticates against the
+Mareo gateway ([`server/README.md`](server/README.md)), stores the user's
+gateway token with Electron `safeStorage` (encrypted into `account.dat` under
+the app's user-data directory), and hands model credentials to DSH only as
+launch environment variables when the runtime starts:
+
+```text
+DEEPSEEK_API_KEY = the user's gateway token
+DEEPSEEK_BASE_URL = the gateway URL
+```
+
+DSH's DeepSeek adapter reads both from the launch environment, so the bundled
+runtime and its UI stay untouched.
+
+- An unauthenticated launch shows the sign-in screen (`assets/signin.html`),
+  which accepts a gateway token pasted by the user; validation and storage
+  happen in the Electron main process.
+- The gateway URL defaults to `http://127.0.0.1:3000` for local development. A
+  distribution build points at the production gateway through the
+  `MAREO_GATEWAY_URL` environment variable (or the `GATEWAY_URL` constant in
+  `src/account.ts`).
+- The gateway (`server/`) proxies model traffic to DeepSeek with your own API
+  key, enforces per-user daily limits, and records one usage row per request.
+  Run it locally with `npm run server:start` (after filling `server/.env`) and
+  issue a user token with `npm run server:issue-token -- <name>`.
+- WeChat QR sign-in is designed for a later phase in
+  [`server/docs/wechat-login-design.md`](server/docs/wechat-login-design.md);
+  until its credentials exist, self-issued gateway tokens remain the only login.
+
 ## Runtime boundary
 
 ```text
@@ -74,6 +106,13 @@ Mareo Electron main process
             -> 127.0.0.1 on an OS-assigned port
                 -> secured Mareo BrowserWindow
 ```
+
+Model traffic leaves DSH as ordinary DeepSeek chat-completions requests against
+`DEEPSEEK_BASE_URL`. In a normal run that endpoint is the Mareo gateway, which
+authenticates the user's token and forwards each request to DeepSeek with your
+API key; running the gateway pointed at `https://api.deepseek.com` is therefore
+the only place the key lives. A DeepSeek key never reaches an end-user machine:
+it is not stored, displayed, or shipped by Mareo.
 
 The DSH launch token is used only for the local authenticated URL and is redacted from Mareo's runtime log. Mareo never runs `npx` or downloads DSH on an end user's machine.
 
