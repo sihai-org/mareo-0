@@ -147,3 +147,7 @@ vite.config.ts.timestamp-*
 
 # Mareo gateway runtime data
 server/data/
+
+# Mareo gateway deployment runtime data
+server/deploy/data/
+server/deploy/backups/

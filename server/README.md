@@ -57,6 +57,9 @@ accounting, and the daily limit are all exercised offline.
 
 ## Deploy
 
-Run the same code on a server (for example an Aliyun ECS instance) behind HTTPS:
-`HOST=0.0.0.0`, keep `.env` out of version control, and put the real DeepSeek
-key only on the server. Point Mareo at the gateway with `MAREO_GATEWAY_URL`.
+Run the same code on a server (for example an Aliyun ECS instance) behind HTTPS.
+The Docker packaging, nginx/Caddy TLS setup, backups, and a step-by-step
+Aliyun runbook live in [`deploy/DEPLOY.md`](deploy/DEPLOY.md); the short version
+is: `cd deploy`, copy `.env.example` to `.env` with your real `DEEPSEEK_API_KEY`,
+then `docker compose up -d --build`. Point Mareo at the gateway with
+`MAREO_GATEWAY_URL`.

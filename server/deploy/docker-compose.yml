@@ -1,0 +1,17 @@
+# Mareo gateway: one container, loopback-published. TLS terminates in front of
+# it (nginx or Caddy, see DEPLOY.md), never on this port.
+name: mareo-gateway
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: mareo-gateway:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
