@@ -32,13 +32,13 @@ test('brand plugin occupies only official brand and overlay slots', () => {
   ])
   for (const name of ['sidebar.brand.mark', 'conversation.hero.brand.mark']) {
     const mark = registrations.get(name)!.render({ size: 24 })
-    assert.equal(mark.props.alt, 'Mareo 0')
+    assert.equal(mark.props.alt, "Mareo");
     assert.equal(mark.props.width, 24)
     assert.equal(mark.props.src, 'data:image/png;base64,test')
   }
   const name = registrations.get('sidebar.brand.name')!.render()
   assert.equal(name.props.style?.height, 24)
-  assert.equal((name.children[0] as Element).children[0], 'Mareo 0')
+  assert.equal((name.children[0] as Element).children[0], "Mareo");
   assert.equal((name.children[1] as Element).children[0], 'Built on DeepSeek Harness')
   const attribution = registrations.get('shell.overlay')!
   assert.equal(attribution.options.id, 'mareo-attribution')

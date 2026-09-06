@@ -1,6 +1,6 @@
 # Third-party notices
 
-Mareo 0 packages the following primary third-party runtimes:
+Mareo packages the following primary third-party runtimes:
 
 - DeepSeek Harness (`@deepseek-ai/dsh` 0.1.2-rc.1), licensed under the MIT License. Its package license is preserved in `Resources/dsh-runtime/node_modules/@deepseek-ai/dsh/LICENSE`.
 - Node.js 24.20.0, licensed under the MIT License and other licenses listed by the Node.js project. Its complete distribution license file is preserved in `Resources/node-runtime/LICENSE`.

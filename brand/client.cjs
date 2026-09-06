@@ -1,25 +1,45 @@
 const React = require('react')
 
 function BrandMark({ size }) {
-  return React.createElement('img', {
+  return React.createElement("img", {
     src: logoUrl,
-    alt: 'Mareo 0',
+    alt: "Mareo",
     width: size,
     height: size,
-    style: { display: 'block', objectFit: 'contain' },
-  })
+    style: { display: "block", objectFit: "contain" },
+  });
 }
 
 function BrandName() {
   // The official sidebar reserves 24px for this slot; both lines fit inside it.
-  return React.createElement('div', { style: { display: 'grid', height: 24 } },
-    React.createElement('span', {
-      style: { fontSize: 14, fontWeight: 600, lineHeight: '14px', whiteSpace: 'nowrap' },
-    }, 'Mareo 0'),
-    React.createElement('span', {
-      style: { fontSize: 9, lineHeight: '10px', color: 'var(--dsw-alias-label-tertiary)', whiteSpace: 'nowrap' },
-    }, 'Built on DeepSeek Harness'),
-  )
+  return React.createElement(
+    "div",
+    { style: { display: "grid", height: 24 } },
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: 14,
+          fontWeight: 600,
+          lineHeight: "14px",
+          whiteSpace: "nowrap",
+        },
+      },
+      "Mareo",
+    ),
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: 9,
+          lineHeight: "10px",
+          color: "var(--dsw-alias-label-tertiary)",
+          whiteSpace: "nowrap",
+        },
+      },
+      "Built on DeepSeek Harness",
+    ),
+  );
 }
 
 function Attribution() {

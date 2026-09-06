@@ -4,17 +4,17 @@ const path = require('node:path')
 /** @type {import('@electron-forge/shared-types').ForgeConfig} */
 module.exports = {
   packagerConfig: {
-    name: 'Mareo 0',
-    icon: path.join(__dirname, '.cache', 'icons', 'mareo.icns'),
-    appBundleId: 'app.mareo.desktop',
-    appCategoryType: 'public.app-category.productivity',
+    name: "Mareo",
+    icon: path.join(__dirname, ".cache", "icons", "mareo.icns"),
+    appBundleId: "app.mareo.desktop",
+    appCategoryType: "public.app-category.productivity",
     asar: true,
     extendInfo: {
       NSAppTransportSecurity: {
         NSAllowsLocalNetworking: true,
       },
     },
-    extraResource: ['.staging/dsh-runtime', '.staging/node-runtime'],
+    extraResource: [".staging/dsh-runtime", ".staging/node-runtime"],
     ignore: [
       /^\/\.cache(?:\/|$)/,
       /^\/\.staging(?:\/|$)/,
@@ -28,31 +28,38 @@ module.exports = {
   },
   makers: [
     {
-      name: '@electron-forge/maker-dmg',
+      name: "@electron-forge/maker-dmg",
       config: {
-        format: 'ULFO',
+        format: "ULFO",
       },
     },
   ],
   hooks: {
     generateAssets: async () => {
-      execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'generate-icon.mjs')])
+      execFileSync(process.execPath, [
+        path.join(__dirname, "scripts", "generate-icon.mjs"),
+      ]);
     },
     postPackage: async (_forgeConfig, { platform, outputPaths }) => {
-      if (platform !== 'darwin') return
+      if (platform !== "darwin") return;
       const unusedPermissions = [
-        'NSAudioCaptureUsageDescription',
-        'NSBluetoothAlwaysUsageDescription',
-        'NSBluetoothPeripheralUsageDescription',
-        'NSCameraUsageDescription',
-        'NSMicrophoneUsageDescription',
-      ]
+        "NSAudioCaptureUsageDescription",
+        "NSBluetoothAlwaysUsageDescription",
+        "NSBluetoothPeripheralUsageDescription",
+        "NSCameraUsageDescription",
+        "NSMicrophoneUsageDescription",
+      ];
       for (const outputPath of outputPaths) {
-        const infoPlist = path.join(outputPath, 'Mareo 0.app', 'Contents', 'Info.plist')
+        const infoPlist = path.join(
+          outputPath,
+          "Mareo.app",
+          "Contents",
+          "Info.plist",
+        );
         for (const permission of unusedPermissions) {
-          execFileSync('/usr/bin/plutil', ['-remove', permission, infoPlist])
+          execFileSync("/usr/bin/plutil", ["-remove", permission, infoPlist]);
         }
       }
     },
   },
-}
+};
