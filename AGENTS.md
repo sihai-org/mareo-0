@@ -122,3 +122,4 @@ This phase primarily accomplishes:
 
 # Project-Specific Requirements
 
+- After completing a task, automatically commit the code.
