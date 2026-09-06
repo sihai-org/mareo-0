@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { get } from 'node:http'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const STARTUP_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 5_000
@@ -49,6 +50,14 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
     throw new Error('The packaged DSH runtime does not declare a dsh CLI entry.')
   }
 
+  // DSH resolves third-party plugins from its profile, so use the installed
+  // package's file URL. This app-owned overlay never rewrites user config.
+  await mkdir(options.dshHome, { recursive: true })
+  const brandPatch = path.join(options.dshHome, 'mareo-brand.patch.json')
+  await writeFile(brandPatch, JSON.stringify([
+    { id: 'ui-brand-official', disabled: true },
+    { insert: [{ id: 'mareo-brand', name: pathToFileURL(path.join(options.runtimeDirectory, 'node_modules', 'mareo-brand', 'index.js')).href }] },
+  ]))
   await mkdir(path.dirname(options.logFile), { recursive: true })
   const log = createWriteStream(options.logFile, { flags: 'w' })
   const child = spawn(
@@ -57,6 +66,8 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
       '--expose-internals',
       path.join(dshPackageDirectory, packageJson.bin.dsh),
       'web',
+      '--patch',
+      brandPatch,
       '--host',
       '127.0.0.1',
       '--port',

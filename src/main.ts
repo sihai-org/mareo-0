@@ -6,7 +6,7 @@ let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
 let shutdownComplete = false
 
-app.setName('Mareo')
+app.setName('Mareo 0')
 // Keep existing installations' data independent of the display name.
 app.setPath('userData', path.join(app.getPath('appData'), 'Mareo'))
 
@@ -40,7 +40,7 @@ async function startMareo(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
   mainWindow = new BrowserWindow({
-    title: 'Mareo',
+    title: 'Mareo 0',
     width: 1280,
     height: 820,
     minWidth: 900,
@@ -55,7 +55,7 @@ async function startMareo(): Promise<void> {
   })
   mainWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    mainWindow?.setTitle('Mareo')
+    mainWindow?.setTitle('Mareo 0')
   })
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   await mainWindow.loadFile(path.join(app.getAppPath(), 'assets', 'startup.html'))
@@ -81,7 +81,7 @@ async function startMareo(): Promise<void> {
       dshRuntime = undefined
       const choice = await dialog.showMessageBox(mainWindow, {
         type: 'error',
-        title: 'Mareo could not start',
+        title: 'Mareo 0 could not start',
         message: 'DeepSeek Harness failed to start.',
         detail: error instanceof Error ? error.message : String(error),
         buttons: ['Retry', 'Quit'],
@@ -118,7 +118,7 @@ function showUnexpectedExit(message: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
   void dialog.showMessageBox(mainWindow, {
     type: 'error',
-    title: 'Mareo stopped',
+    title: 'Mareo 0 stopped',
     message,
     detail: `The current log is stored at ${path.join(app.getPath('userData'), 'logs', 'mareo.log')}.`,
     buttons: ['Quit'],
@@ -126,6 +126,6 @@ function showUnexpectedExit(message: string): void {
 }
 
 function showFatalError(error: unknown): void {
-  dialog.showErrorBox('Mareo could not start', error instanceof Error ? error.message : String(error))
+  dialog.showErrorBox('Mareo 0 could not start', error instanceof Error ? error.message : String(error))
   app.quit()
 }

@@ -1,6 +1,6 @@
-# Mareo
+# Mareo 0
 
-Mareo is a thin macOS desktop host for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It packages the published DSH runtime without forking or patching it, starts the local Web UI automatically, and displays it in a secured Electron window.
+Mareo 0 is a thin macOS desktop host for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It packages the published DSH runtime without forking or patching its source, starts the local Web UI automatically, and displays it in a secured Electron window.
 
 ## V0 scope
 
@@ -20,7 +20,7 @@ Install the desktop build dependencies:
 npm install
 ```
 
-Run Mareo:
+Run Mareo 0:
 
 ```sh
 npm start
@@ -34,6 +34,7 @@ Useful checks:
 npm run typecheck
 npm test
 npm run verify:runtime
+npm run verify:brand
 ```
 
 ## Package
@@ -48,24 +49,32 @@ npm run verify:package
 Artifacts are written to:
 
 ```text
-out/Mareo-darwin-arm64/Mareo.app
-out/make/Mareo-0.1.0-arm64.dmg
+out/Mareo 0-darwin-arm64/Mareo 0.app
+out/make/Mareo 0-0.1.0-arm64.dmg
 ```
 
 The V0 DMG is unsigned and is intended only for internal testing.
 
-The desktop brand is `Mareo`, with bundle ID `app.mareo.desktop`. The application and Dock use `assets/app-icon.png`: the original logo on a white rounded plate, with transparent margins and a subtle shadow. The startup page independently uses `assets/logo-white.png`, a white-background composite. Neither asset redraws the original `assets/logo.png`. When the original changes, run `python3 scripts/compose-app-icon.py` and `python3 scripts/flatten-logo.py` (requires Pillow), then commit the original and generated images. Normal development and packaging use the committed images and do not require Python. Forge generates the macOS application icon automatically using `sips` and `iconutil`. The existing `Mareo` user-data directory is retained so branding changes do not reset settings or conversations. DSH's own UI and published dependency remain unmodified.
+The desktop brand is `Mareo 0`, with bundle ID `app.mareo.desktop`. The application and Dock use `assets/app-icon.png`: the original logo on a white rounded plate, with transparent margins and a subtle shadow. The startup page independently uses `assets/logo-white.png`, a white-background composite. Neither asset redraws the original `assets/logo.png`. When the original changes, run `python3 scripts/compose-app-icon.py` and `python3 scripts/flatten-logo.py` (requires Pillow), then commit the original and generated images. Normal development and packaging use the committed images and do not require Python. Forge generates the macOS application icon automatically using `sips` and `iconutil`. The existing `Mareo` user-data directory is retained so branding changes do not reset settings or conversations.
+
+## DSH brand extension
+
+`brand/` owns the `mareo-brand` plugin. Staging packages its browser factory and embedded original logo alongside the unmodified npm dependencies. The launcher writes an app-owned `mareo-brand.patch.json` under DSH home and passes it through the official `--patch` option. The overlay disables `ui-brand-official` and loads our package by its installed file URL, so moving the application does not break package resolution. It never overwrites the user's profile or settings.
+
+The plugin uses only `sidebar.brand.mark`, `sidebar.brand.name`, `conversation.hero.brand.mark`, and `shell.overlay`. The sidebar shows `Mareo 0` and `Built on DeepSeek Harness`; the same attribution appears at the bottom right. The default hero headline and Preview badge are retained. There is no DOM rewriting, global CSS override, source patch, or fork. Attribution follows the [official brand guidelines](https://github.com/deepseek-ai/deepseek-harness/blob/master/BRAND_GUIDELINES.md).
+
+Run `npm run verify:brand` after staging, or `node scripts/verify-brand.mjs "out/Mareo 0-darwin-arm64/Mareo 0.app/Contents/Resources"` after packaging. This boots an isolated temporary DSH home and checks authenticated loading and brand composition without an API key. Add `--serve` after the resources path to keep the test instance available for visual checks. When upgrading DSH, also verify sidebar folding, both themes, and attribution placement in the UI.
 
 ## Runtime boundary
 
 ```text
-Mareo Electron main process
+Mareo 0 Electron main process
     -> bundled official Node.js
         -> published @deepseek-ai/dsh CLI
             -> 127.0.0.1 on an OS-assigned port
-                -> secured Mareo BrowserWindow
+                -> secured Mareo 0 BrowserWindow
 ```
 
-The DSH launch token is used only for the local authenticated URL and is redacted from Mareo's runtime log. Mareo never runs `npx` or downloads DSH on an end user's machine.
+The DSH launch token is used only for the local authenticated URL and is redacted from Mareo 0's runtime log. Mareo 0 never runs `npx` or downloads DSH on an end user's machine.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the primary packaged runtimes.

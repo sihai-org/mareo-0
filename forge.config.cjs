@@ -4,7 +4,7 @@ const path = require('node:path')
 /** @type {import('@electron-forge/shared-types').ForgeConfig} */
 module.exports = {
   packagerConfig: {
-    name: 'Mareo',
+    name: 'Mareo 0',
     icon: path.join(__dirname, '.cache', 'icons', 'mareo.icns'),
     appBundleId: 'app.mareo.desktop',
     appCategoryType: 'public.app-category.productivity',
@@ -21,6 +21,7 @@ module.exports = {
       /^\/dist\/tests(?:\/|$)/,
       /^\/runtime(?:\/|$)/,
       /^\/scripts(?:\/|$)/,
+      /^\/brand(?:\/|$)/,
       /^\/tests(?:\/|$)/,
       /^\/src\/.*\.ts$/,
     ],
@@ -47,7 +48,7 @@ module.exports = {
         'NSMicrophoneUsageDescription',
       ]
       for (const outputPath of outputPaths) {
-        const infoPlist = path.join(outputPath, 'Mareo.app', 'Contents', 'Info.plist')
+        const infoPlist = path.join(outputPath, 'Mareo 0.app', 'Contents', 'Info.plist')
         for (const permission of unusedPermissions) {
           execFileSync('/usr/bin/plutil', ['-remove', permission, infoPlist])
         }
