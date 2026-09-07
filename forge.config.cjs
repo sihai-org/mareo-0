@@ -23,7 +23,7 @@ module.exports = {
       /^\/scripts(?:\/|$)/,
       /^\/server(?:\/|$)/,
       /^\/brand(?:\/|$)/,
-      /^\/website-codex(?:\/|$)/,
+      /^\/website(?:\/|$)/,
       /^\/tests(?:\/|$)/,
       /^\/src\/.*\.ts$/,
     ],

@@ -1,184 +1,75 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mareo · macOS AI 助手 / AI Assistant</title>
-  <meta name="description" content="Mareo — 基于 DeepSeek Harness 的原生 macOS AI 助手。无需 API Key，开箱即用。Built on DeepSeek Harness for macOS." />
-  <link rel="icon" href="favicon.png" type="image/png" />
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Mareo，让 AI 走进你的工作区。基于 DeepSeek Harness 构建的桌面 AI Agent，适用于 macOS Apple Silicon。">
+  <meta name="theme-color" content="#fafbff">
+  <title>Mareo — 让 AI 走进你的工作区</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-
-<header class="site-header">
-  <nav class="nav container">
-    <a class="brand" href="#top">
-      <img src="logo.png" alt="Mareo" width="32" height="32" />
-      <span>Mareo</span>
-    </a>
-    <div class="nav-links">
-      <a href="#features"><span class="zh">特性</span><span class="en">Features</span></a>
-      <a href="#download"><span class="zh">下载</span><span class="en">Download</span></a>
-      <a href="#faq"><span class="zh">常见问题</span><span class="en">FAQ</span></a>
-      <span class="lang-switch" role="group" aria-label="Language">
-        <button id="lang-zh" type="button" aria-pressed="true">中文</button>
-        <button id="lang-en" type="button" aria-pressed="false">EN</button>
-      </span>
-    </div>
-  </nav>
-</header>
-
-<main id="top">
-
-  <!-- Hero -->
-  <section class="hero">
-    <div class="container hero-inner">
-      <img class="hero-logo" src="logo.png" alt="Mareo" width="96" height="96" />
-      <h1>Mareo</h1>
-      <p class="hero-tagline">
-        <span class="zh">基于 DeepSeek Harness 的原生 macOS AI 助手 —— 开箱即用，无需 API Key。</span>
-        <span class="en">A native macOS AI assistant built on DeepSeek Harness. Zero setup — no API keys needed.</span>
-      </p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#download">
-          <span class="zh">下载 macOS 版</span><span class="en">Download for macOS</span>
-        </a>
-        <a class="btn btn-ghost" href="#features">
-          <span class="zh">了解更多</span><span class="en">Learn more</span>
-        </a>
+  <a class="skip-link" href="#main"><span lang="zh-CN">跳转到内容</span><span lang="en">Skip to content</span></a>
+  <header class="header wrap">
+    <a class="brand" href="#" aria-label="Mareo"><img src="assets/logo.png" width="42" height="42" alt=""><span>Mareo</span></a>
+    <nav aria-label="Navigation / 导航">
+      <a href="#features"><span lang="zh-CN">认识 Mareo</span><span lang="en">Discover</span></a>
+      <a href="#download"><span lang="zh-CN">下载</span><span lang="en">Download</span></a>
+      <div class="languages" role="group" aria-label="Language / 语言" hidden>
+        <button type="button" data-language="zh-CN" aria-pressed="true">中文</button>
+        <button type="button" data-language="en" aria-pressed="false">EN</button>
       </div>
-      <p class="hero-note">
-        <span class="zh">当前为 macOS Apple Silicon 内测版</span>
-        <span class="en">Currently in beta for macOS Apple Silicon</span>
-      </p>
-    </div>
-  </section>
+    </nav>
+  </header>
 
-  <!-- Features -->
-  <section id="features" class="section">
-    <div class="container">
-      <h2 class="section-title"><span class="zh">为什么选择 Mareo</span><span class="en">Why Mareo</span></h2>
-      <div class="cards">
-        <article class="card">
-          <h3><span class="zh">免配置即用</span><span class="en">Works out of the box</span></h3>
-          <p><span class="zh">无需注册模型服务、无需填写任何 API Key。登录你的账号，打开就能开始工作。</span>
-             <span class="en">No model-service signup, no API keys to paste. Sign in and start working.</span></p>
-        </article>
-        <article class="card">
-          <h3><span class="zh">密钥不落地</span><span class="en">Keys never touch your machine</span></h3>
-          <p><span class="zh">底层模型凭据托管在服务端，你的电脑上只保存登录令牌，密钥无法被读取或泄露。</span>
-             <span class="en">Model credentials live server-side; your device only holds a login token that cannot be extracted into a usable key.</span></p>
-        </article>
-        <article class="card">
-          <h3><span class="zh">原生本地体验</span><span class="en">Native and local-first</span></h3>
-          <p><span class="zh">原生 macOS 应用，DSH 运行时在你本机运行，会话记录与工作文件默认留在你的电脑。</span>
-             <span class="en">A native macOS app running the DSH runtime locally; sessions and files stay on your machine.</span></p>
-        </article>
-        <article class="card">
-          <h3><span class="zh">干净的架构</span><span class="en">Clean architecture</span></h3>
-          <p><span class="zh">Mareo 只是 DeepSeek Harness 的桌面壳，不修改其运行时，可随官方版本安全升级。</span>
-             <span class="en">Mareo is a thin desktop shell over DeepSeek Harness — no forks, safe upgrades.</span></p>
-        </article>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span> YOUR DESKTOP. NEW POSSIBILITIES.</p>
+        <h1 id="hero-title"><span lang="zh-CN">让 AI 走进<br>你的<span class="accent">工作区。</span></span><span lang="en">Your workspace.<br><span class="accent">A new possibility.</span></span></h1>
+        <p class="intro"><span lang="zh-CN">不止于一场对话。Mareo 将 DeepSeek Harness 带到桌面，让你围绕文件、项目和想法，与 AI 一起推进工作。</span><span lang="en">More than a conversation. Mareo brings DeepSeek Harness to your desktop, so you can work with AI around your files, projects, and ideas.</span></p>
+        <a class="button primary" href="#download"><span lang="zh-CN">获取 Mareo</span><span lang="en">Get Mareo</span><span aria-hidden="true">↗</span></a>
+        <p class="platform">macOS · Apple Silicon <span class="separator">/</span> <span lang="zh-CN">桌面 AI Agent</span><span lang="en">Desktop AI agent</span></p>
       </div>
-    </div>
-  </section>
+      <div class="hero-art" aria-hidden="true">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <img src="assets/logo.png" width="400" height="400" alt="" fetchpriority="high">
+        <span class="art-caption">A LITTLE CURIOSITY.<br>A WHOLE NEW START.</span>
+      </div>
+    </section>
 
-  <!-- Download -->
-  <section id="download" class="section section-alt">
-    <div class="container download-inner">
-      <h2 class="section-title"><span class="zh">下载 Mareo</span><span class="en">Download Mareo</span></h2>
-      <p class="muted">
-        <span class="zh">macOS（Apple Silicon，arm64）· 内测版 v0.1.0</span>
-        <span class="en">macOS (Apple Silicon, arm64) · Beta v0.1.0</span>
-      </p>
-      <a class="btn btn-primary btn-lg" href="downloads/Mareo-0.1.0-arm64.dmg" download>
-        <span class="zh">下载 DMG（内测版）</span><span class="en">Download DMG (Beta)</span>
-      </a>
-      <p class="note-box">
-        <span class="zh">当前为<strong>未签名内测版</strong>：首次打开若被 macOS 拦截，请右键点击应用 →「打开」。正式签名版即将推出，发布后将自动替换本站下载。</span>
-        <span class="en">This is an <strong>unsigned beta</strong>: if macOS blocks it on first launch, right-click the app and choose "Open". A signed release is coming and will replace this download.</span>
-      </p>
-      <!-- SHA-256: 待上传 DMG 后填写（占位） -->
-      <p class="muted mono">
-        <span class="zh">SHA-256：</span><span class="en">SHA-256:</span>
-        <code id="dmg-sha">（待补充 / pending）</code>
-      </p>
-    </div>
-  </section>
+    <div class="foundation wrap"><span lang="zh-CN">熟悉的 Harness 体验，更简单的开始。</span><span lang="en">The Harness experience. A simpler way in.</span><a href="https://github.com/deepseek-ai/deepseek-harness">Built on DeepSeek Harness <span aria-hidden="true">↗</span></a></div>
 
-  <!-- How it works / trust -->
-  <section id="trust" class="section">
-    <div class="container">
-      <h2 class="section-title"><span class="zh">它是如何工作的</span><span class="en">How it works</span></h2>
-      <ol class="steps">
-        <li>
-          <span class="zh">安装 Mareo 并登录你的账号</span>
-          <span class="en">Install Mareo and sign in with your account</span>
-        </li>
-        <li>
-          <span class="zh">模型请求经你的账号安全代理到 DeepSeek，密钥始终留在服务端</span>
-          <span class="en">Model requests are proxied through your account; keys never leave the server</span>
-        </li>
-        <li>
-          <span class="zh">对话、文件与任务在你本机的 Harness 运行时中执行</span>
-          <span class="en">Conversations, files and tasks run in the Harness runtime on your machine</span>
-        </li>
-      </ol>
-    </div>
-  </section>
+    <section id="features" class="features wrap" aria-labelledby="features-title">
+      <div class="section-heading"><p class="eyebrow">MEET MAREO</p><h2 id="features-title"><span lang="zh-CN">从一个想法，<br>到下一步行动。</span><span lang="en">From an idea<br> to your next move.</span></h2></div>
+      <div class="feature-list">
+        <article><span class="feature-number">01</span><div><h3><span lang="zh-CN">打开应用，开始工作</span><span lang="en">Open the app. Get to work.</span></h3><p><span lang="zh-CN">无需用命令行启动 Harness。安装 Mareo，从桌面打开，进入熟悉的对话与工作区。</span><span lang="en">No terminal command to launch Harness. Install Mareo and open it from your desktop to reach your conversations and workspaces.</span></p></div></article>
+        <article><span class="feature-number">02</span><div><h3><span lang="zh-CN">围绕你的项目展开</span><span lang="en">Keep your project in focus.</span></h3><p><span lang="zh-CN">选择本地工作区，与 AI 讨论任务、处理文件，让对话与正在进行的工作保持联系。</span><span lang="en">Choose a local workspace, discuss tasks, and work on files with AI. Keep the conversation connected to the work in front of you.</span></p></div></article>
+        <article><span class="feature-number">03</span><div><h3><span lang="zh-CN">不必管理模型 API Key</span><span lang="en">One less thing to configure.</span></h3><p><span lang="zh-CN">通过 Mareo 账号接入模型服务，不需要自行申请或填写 DeepSeek API Key。</span><span lang="en">Access the model service through your Mareo account. You don't need to obtain or enter a DeepSeek API key.</span></p></div></article>
+      </div>
+    </section>
 
-  <!-- FAQ -->
-  <section id="faq" class="section section-alt">
-    <div class="container">
-      <h2 class="section-title"><span class="zh">常见问题</span><span class="en">FAQ</span></h2>
-      <details>
-        <summary><span class="zh">需要 DeepSeek API Key 吗？</span><span class="en">Do I need a DeepSeek API key?</span></summary>
-        <p><span class="zh">不需要。登录你的账号即可使用，底层模型调用由服务端代理完成。</span>
-           <span class="en">No. Sign in with your account and start; model calls are handled server-side.</span></p>
-      </details>
-      <details>
-        <summary><span class="zh">怎么获得账号？</span><span class="en">How do I get an account?</span></summary>
-        <p><span class="zh">内测期间向运营者领取访问令牌，在 Mareo 登录页粘贴即可。</span>
-           <span class="en">During beta, request an access token from the operator and paste it into Mareo's sign-in screen.</span></p>
-      </details>
-      <details>
-        <summary><span class="zh">支持哪些系统？</span><span class="en">Which systems are supported?</span></summary>
-        <p><span class="zh">目前是 macOS Apple Silicon（arm64）内测版；其他平台后续规划。</span>
-           <span class="en">Currently macOS on Apple Silicon (arm64) in beta; more platforms are planned.</span></p>
-      </details>
-      <details>
-        <summary><span class="zh">我的对话数据在哪里？</span><span class="en">Where is my conversation data?</span></summary>
-        <p><span class="zh">会话记录默认保存在你本机的 Mareo 数据目录；模型请求内容经网关转发处理。</span>
-           <span class="en">Sessions are stored locally in Mareo's data directory; requests are forwarded through the gateway.</span></p>
-      </details>
-      <details>
-        <summary><span class="zh">Mareo 与 DeepSeek Harness 是什么关系？</span><span class="en">How does Mareo relate to DeepSeek Harness?</span></summary>
-        <p><span class="zh">Mareo 是 Harness 的桌面宿主，不改动其运行时，并遵循官方品牌指引署名「Built on DeepSeek Harness」。</span>
-           <span class="en">Mareo is a desktop host for Harness. It never patches the runtime and credits "Built on DeepSeek Harness" per official guidelines.</span></p>
-      </details>
-    </div>
-  </section>
+    <section id="download" class="download wrap" aria-labelledby="download-title">
+      <div class="download-panel">
+        <div><p class="eyebrow">A NEW START</p><h2 id="download-title"><span lang="zh-CN">下一步，<br>在你的桌面上。</span><span lang="en">Your next chapter.<br>On your desktop.</span></h2><p class="download-description"><span lang="zh-CN">为 macOS Apple Silicon 而来。</span><span lang="en">For macOS on Apple Silicon.</span></p></div>
+        <div class="release">
+          <img src="assets/app-icon.png" width="88" height="88" alt="Mareo" loading="lazy">
+          <h3>Mareo <span>for macOS</span></h3>
+          <p>Apple Silicon · arm64</p>
+          <a id="download-link" class="button download-button" hidden><span lang="zh-CN">下载 macOS 版</span><span lang="en">Download for macOS</span><span aria-hidden="true">↓</span></a>
+          <p id="download-pending" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
+          <p class="release-note"><span lang="zh-CN">当前仅面向搭载 Apple 芯片的 Mac。</span><span lang="en">For Mac computers with Apple silicon only.</span></p>
+        </div>
+      </div>
+    </section>
 
-</main>
-
-<footer class="site-footer">
-  <div class="container footer-inner">
-    <p class="muted">© <span id="year">2026</span> Mareo ·
-      <span class="zh">基于 DeepSeek Harness 构建</span><span class="en">Built on DeepSeek Harness</span>
-    </p>
-    <p class="muted">
-      <!-- 上线前填写你的 ICP 备案号 -->
-      <span class="zh">ICP 备案号：<code>（待填写）</code></span>
-      <span class="en">ICP Filing: <code>(pending)</code></span>
-    </p>
-    <p class="muted">
-      <span class="zh">联系我们：</span><span class="en">Contact:</span>
-      <!-- 替换为你的联系邮箱 -->
-      <a href="mailto:hello@example.com">hello@example.com</a>
-    </p>
-  </div>
-</footer>
-
-<script src="app.js"></script>
+    <section class="details wrap" aria-label="About Mareo / 关于 Mareo">
+      <div><h3><span lang="zh-CN">桌面运行，在线协作</span><span lang="en">On your desktop. Connected online.</span></h3><p><span lang="zh-CN">Harness 运行在你的电脑上。使用模型需要联网；相关请求内容会经 Mareo 网关发送至模型服务，并非完全离线处理。</span><span lang="en">Harness runs on your computer. Model access requires an internet connection; relevant request content is sent through the Mareo gateway to the model service, not processed entirely offline.</span></p></div>
+      <div><h3><span lang="zh-CN">基于 Harness，保持独立</span><span lang="en">Built on Harness. Independently made.</span></h3><p><span lang="zh-CN">Mareo 是基于 DeepSeek Harness 构建的独立桌面产品，并非 DeepSeek 官方应用。</span><span lang="en">Mareo is an independent desktop product built on DeepSeek Harness, not an official DeepSeek application.</span></p></div>
+    </section>
+  </main>
+  <footer class="footer wrap"><a class="brand" href="#"><img src="assets/logo.png" width="32" height="32" alt=""><span>Mareo</span></a><p>Built on <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a></p><span class="copyright">© 2026 Mareo</span></footer>
 </body>
 </html>

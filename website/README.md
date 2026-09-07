@@ -1,51 +1,39 @@
-# Mareo 官网（website/）
+# Mareo 静态官网
 
-无框架纯静态站：`index.html` + `styles.css` + `app.js`。中英双语单页（页内语言切换，默认按浏览器语言；选择记忆在 localStorage）。
+独立于桌面应用、服务端及 `website/`。原生 HTML / CSS / JavaScript，无安装步骤、构建工具或服务端依赖。中英文内容均在 HTML 中；默认中文，切换后在当前浏览器记住选择。无统计、外部字体、登录或网关调用。
 
-## 本地预览
+## 预览与部署
 
-```sh
-cd website
-python3 -m http.server 8080    # 打开 http://127.0.0.1:8080
-```
+在仓库根目录运行 `python3 -m http.server 8080 --bind 127.0.0.1 --directory website-codex`，打开 http://127.0.0.1:8080 。也可以直接打开 `index.html`（语言偏好保存取决于浏览器的本地文件策略）。
 
-## 改文案
+将以下内容原样上传到静态服务器的站点目录或子目录：
 
-文案直接在 `index.html` 里改。每个可翻译文本是一对内联节点：
+- `index.html`
+- `styles.css`
+- `app.js`
+- `assets/`
 
-```html
-<p><span class="zh">中文文案</span><span class="en">English copy</span></p>
-```
+所有站内资源使用相对路径，不需要 SPA 路由回退或 Node.js。`README.md` 和 `test.mjs` 不需要部署。
 
-`html[lang]` 由 `app.js` 切换，CSS 只显示当前语言。新增小节时保持这个成对结构即可，不需要任何构建。
+## 开放下载
 
-## 上线前必填的占位（都在 index.html 里搜注释）
+当前未提供安装包地址，页面明确显示「下载即将开放」，不会指向不存在的文件。
 
-| 占位 | 位置 | 说明 |
-|---|---|---|
-| ICP 备案号 | footer | `<!-- 上线前填写你的 ICP 备案号 -->` |
-| 联系邮箱 | footer | `mailto:hello@example.com` |
-| DMG SHA-256 | 下载区 | `<code id="dmg-sha">（待补充 / pending）</code>`，传完 DMG 后补 |
+1. 上传准备发布的 macOS Apple Silicon DMG 到自己的服务器或下载存储。
+2. 修改 `app.js` 第一项配置 `downloadUrl`，填入真实 HTTPS URL，或相对地址，例如 `downloads/Mareo-0.1.0-arm64.dmg`。使用相对地址时，把对应文件一起部署。
+3. 刷新页面，下载按钮会自动取代待开放提示。检查链接返回真实 DMG 文件，而非 HTML 错误页；外部存储应设置正确的下载文件名和响应头。
+4. 上线前自行确认安装包版本、支持的 macOS 版本、签名和公证状态。此页面不宣称现有安装包已经签名、公证或正式发布；不要把内部测试包误标为正式版。
 
-## 下载文件（不入 Git）
+没有 JavaScript 时仍能浏览中文产品介绍，下载保持待开放状态。若要求关闭 JavaScript 也可下载，发布时直接在 HTML 的 `download-link` 上填入 `href`、移除 `hidden`，并给 `download-pending` 添加 `hidden`。
 
-DMG 放哪：ECS 上站点根目录的 `downloads/` 下（约 200MB，不入仓库）。部署时从本机 `out/make/` 上传：
+## 维护
 
-```sh
-# 部署到服务器后
-scp out/make/Mareo-0.1.0-arm64.dmg root@<ECS>:/var/www/mareo-site/downloads/
-shasum -a 256 out/make/Mareo-0.1.0-arm64.dmg   # 把结果填进 index.html 的 SHA-256
-```
+- 文案：修改 `index.html` 中成对的 `lang="zh-CN"` / `lang="en"` 内容。页标题和描述在 `app.js` 的 `pageText` 中，同时保持 HTML 的默认中文元信息一致。
+- 图片：`assets/logo.png`、`assets/app-icon.png` 直接复用已有品牌素材，没有重新绘制。
+- 更多平台：在下载区添加对应平台条目与真实链接即可；当前没有自动更新、版本解析或操作系统检测。
+- 域名、联系方式、备案信息等未提供，因此未虚构这些内容；按自己的实际发布要求补充。
+- 署名保留 `Built on DeepSeek Harness`，明确 Mareo 是独立产品。模型请求需联网，页面没有承诺所有数据仅在本地处理。
 
-## 部署（同 ECS nginx）
+## 验证
 
-网站与网关同机（`mareo.cn` 大陆站）。服务器上：
-
-```sh
-mkdir -p /var/www/mareo-site/downloads
-rsync -az website/ root@<ECS>:/var/www/mareo-site/
-```
-
-站点 nginx 配置示例见 `nginx-mareo.cn.conf.example`（需 DNS：`mareo.cn` 与 `www.mareo.cn` 的 A 记录指向 ECS；证书用阿里云免费证书或 Let's Encrypt，流程与网关一致）。
-
-> 注意：这是**面向公众的官网**，正式上线前还需：补 ICP 备案号展示、隐私政策/用户协议页（后续新增）、替换为**签名版** DMG 下载。
+运行 `node --test website-codex/test.mjs`，覆盖语言切换、记忆、存储不可用、下载开关以及本地资源与锚点引用。发布前同时检查中英文桌面和手机布局，以及真实下载链接。
