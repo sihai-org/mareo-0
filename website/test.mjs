@@ -6,7 +6,18 @@ import vm from 'node:vm';
 const script = readFileSync(new URL('app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('index.html', import.meta.url), 'utf8');
 
-function openPage({ saved, storageBlocked = false, download = '' } = {}) {
+function configuredDownloadUrl(source) {
+  const match = source.match(/const downloadUrl = ['"]([^'"]*)['"];/);
+  return match ? match[1] : '';
+}
+
+function openPage({ saved, storageBlocked = false, download } = {}) {
+  // download === undefined keeps the repository's configured default;
+  // any other value overrides it for this page instance.
+  const body =
+    download === undefined
+      ? script
+      : script.replace(/const downloadUrl = [^;]+;/, `const downloadUrl = ${JSON.stringify(download)};`);
   const buttons = ['zh-CN', 'en'].map(language => ({
     dataset: { language }, attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -21,7 +32,7 @@ function openPage({ saved, storageBlocked = false, download = '' } = {}) {
     getElementById: id => id === 'download-link' ? downloadLink : pending,
   };
   const storage = new Map(saved ? [['mareo-site-language', saved]] : []);
-  vm.runInNewContext(script.replace("const downloadUrl = '';", `const downloadUrl = ${JSON.stringify(download)};`), {
+  vm.runInNewContext(body, {
     document,
     localStorage: {
       getItem(key) { if (storageBlocked) throw Error('blocked'); return storage.get(key); },
@@ -54,16 +65,28 @@ test('Invalid preferences and unavailable storage do not break the page', () => 
   assert.equal(page.document.documentElement.lang, 'en');
 });
 
-test('Download stays unavailable until an actual release URL is configured', () => {
-  const pending = openPage();
-  assert.equal(pending.downloadLink.hidden, true);
-  assert.equal(pending.pending.hidden, false);
-  for (const download of ['downloads/Mareo-arm64.dmg', 'https://downloads.example.test/Mareo.dmg']) {
-    const page = openPage({ download });
-    assert.equal(page.downloadLink.href, download);
+test('Download reflects the configured release URL and can be toggled off', () => {
+  const defaultUrl = configuredDownloadUrl(script);
+
+  if (defaultUrl) {
+    const page = openPage();
+    assert.equal(page.downloadLink.href, defaultUrl);
     assert.equal(page.downloadLink.hidden, false);
     assert.equal(page.pending.hidden, true);
+  } else {
+    const page = openPage();
+    assert.equal(page.downloadLink.hidden, true);
+    assert.equal(page.pending.hidden, false);
   }
+
+  const overridden = openPage({ download: 'downloads/Mareo-arm64.dmg' });
+  assert.equal(overridden.downloadLink.href, 'downloads/Mareo-arm64.dmg');
+  assert.equal(overridden.downloadLink.hidden, false);
+  assert.equal(overridden.pending.hidden, true);
+
+  const disabled = openPage({ download: '' });
+  assert.equal(disabled.downloadLink.hidden, true);
+  assert.equal(disabled.pending.hidden, false);
 });
 
 test('Static assets and fragment links resolve within the standalone directory', () => {

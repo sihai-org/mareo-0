@@ -1,5 +1,5 @@
 // Set a relative DMG path or an HTTPS download URL when the release is ready.
-const downloadUrl = '';
+const downloadUrl = 'downloads/Mareo-0.1.0-arm64.dmg';
 
 const pageText = {
   'zh-CN': {
