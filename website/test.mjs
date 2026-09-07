@@ -68,8 +68,9 @@ test('Download stays unavailable until an actual release URL is configured', () 
 
 test('Static assets and fragment links resolve within the standalone directory', () => {
   for (const [, reference] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
-    if (reference.startsWith('https://') || reference === '#') continue;
+    if (reference === '#') continue;
     if (reference.startsWith('#')) assert(html.includes(`id="${reference.slice(1)}"`), reference);
+    else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference)) continue; // absolute schemes: https, mailto, …
     else assert(existsSync(new URL(reference, import.meta.url)), reference);
   }
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);

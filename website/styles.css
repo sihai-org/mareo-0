@@ -364,6 +364,7 @@ h3 {
   border-top:1px solid var(--line);
   padding-block:30px;
   display:flex;
+  flex-wrap:wrap;
   align-items:center;
   justify-content:space-between;
   gap:20px
@@ -371,11 +372,18 @@ h3 {
 .footer .brand {
   font-size:22px
 }
+.footer .footer-meta {
+  margin:0;
+  flex-basis:100%;
+  text-align:center;
+  font-size:12px;
+  color:var(--muted)
+}
 .footer p,.copyright {
   font-size:12px;
   color:var(--muted)
 }
-.footer p a {
+.footer p a,.footer .footer-meta a {
   text-decoration:underline;
   text-underline-offset:4px
 }
