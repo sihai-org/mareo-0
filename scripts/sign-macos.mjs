@@ -53,7 +53,7 @@ export async function notarizeApp(appPath) {
   const temporary = await mkdtemp(path.join(tmpdir(), 'mareo-notarize-'))
   try {
     const zip = path.join(temporary, 'Mareo.zip')
-    await execFileAsync('ditto', ['-c', '-k', '--sequester-rsrc', '--keepParent', appPath, zip])
+    await execFileAsync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zip])
     await execFileAsync('xcrun', [
       'notarytool', 'submit', zip,
       '--apple-id', APPLE_ID,
