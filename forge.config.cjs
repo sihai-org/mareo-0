@@ -24,6 +24,7 @@ module.exports = {
       /^\/server(?:\/|$)/,
       /^\/brand(?:\/|$)/,
       /^\/website(?:\/|$)/,
+      /^\/entitlements\.mac\.plist$/,
       /^\/tests(?:\/|$)/,
       /^\/src\/.*\.ts$/,
     ],
@@ -51,6 +52,8 @@ module.exports = {
         "NSCameraUsageDescription",
         "NSMicrophoneUsageDescription",
       ];
+      // Optional Developer ID signing + notarization (see scripts/sign-macos.mjs).
+      const { signApp, notarizeApp } = await import("./scripts/sign-macos.mjs");
       for (const outputPath of outputPaths) {
         const infoPlist = path.join(
           outputPath,
@@ -60,6 +63,10 @@ module.exports = {
         );
         for (const permission of unusedPermissions) {
           execFileSync("/usr/bin/plutil", ["-remove", permission, infoPlist]);
+        }
+        const appPath = path.join(outputPath, "Mareo.app");
+        if (await signApp(appPath)) {
+          await notarizeApp(appPath);
         }
       }
     },
