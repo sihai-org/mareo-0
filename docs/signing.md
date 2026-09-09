@@ -59,3 +59,19 @@ spctl -a -t exec -vv "$APP"            # 期望: accepted, source=Notarized Deve
 | 公证报错 invalid | 确认 `APPLE_APP_SPECIFIC_PASSWORD` 是 App 专用密码（不是登录密码）且账号是开发者账号本人 |
 | `npm run make` 拉 Electron 超时 | 记得 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` |
 | 只想快速出个未签名包 | 不设任何签名环境变量直接 `npm run make`（自动跳过） |
+
+## 一键发布
+
+`scripts/release.mjs`（`npm run release`）把整条发布链串成一条命令：
+检查证书 → `npm run make`（签名+公证）→ 本地验证（codesign/stapler/spctl）→ 上传 DMG 到服务器 `downloads/` → 同步官网文件 → 验证线上下载 URL → 打印 sha256。
+
+用法：
+
+```sh
+cp scripts/release.env.example .release.env   # 首次：填密钥与服务器（.release.env 已被 git 忽略）
+npm run release                               # 全流程
+npm run release -- --no-upload                # 只本地打包+验证，不发布
+```
+
+> 若改了 `package.json` 的版本号，DMG 文件名随之变化——记得同步更新 `website/app.js` 的 `downloadUrl`（脚本结束时会提醒）。
+
