@@ -16,7 +16,7 @@ mkdir -p backups
 docker compose exec -T gateway node -e "
   const { DatabaseSync } = require('node:sqlite')
   const db = new DatabaseSync(process.env.DB_PATH ?? 'data/mareo.db')
-  db.exec('VACUUM INTO \"/app/backups/$filename\"')
+  db.exec(\"VACUUM INTO '/app/backups/$filename'\")
   db.close()
 "
 
