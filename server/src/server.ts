@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { generateTokenSecret, hashToken } from './auth.js'
-import { findOrCreateAccountForIdentity, findTokenOwner, storeToken, type GatewayDatabase, type TokenOwner } from './db.js'
+import { renameAccount, revokeToken, findOrCreateAccountForIdentity, findTokenOwner, storeToken, type GatewayDatabase, type TokenOwner } from './db.js'
 import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from './email-auth.js'
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
@@ -46,7 +46,37 @@ async function handleRequest(
       sendJson(response, 401, { error: 'invalid token' })
       return
     }
-    sendJson(response, 200, { displayName: owner.displayName })
+    sendJson(response, 200, { displayName: owner.displayName, accountId: owner.userId })
+    return
+  }
+
+  if (request.method === 'POST' && pathname === '/account/name') {
+    const owner = authenticate(request, options.db)
+    if (!owner) {
+      sendJson(response, 401, { error: 'invalid token' })
+      return
+    }
+    const body = await readJsonBody(request)
+    const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : ''
+    if (displayName.length === 0 || displayName.length > 32) {
+      sendJson(response, 400, { error: 'invalid-name' })
+      return
+    }
+    renameAccount(options.db, owner.userId, displayName)
+    sendJson(response, 200, { ok: true, displayName })
+    return
+  }
+
+  if (request.method === 'POST' && pathname === '/account/sign-out') {
+    const header = request.headers.authorization
+    const tokenHash = header?.startsWith('Bearer ') ? hashToken(header.slice('Bearer '.length).trim()) : ''
+    const owner = tokenHash ? findTokenOwner(options.db, tokenHash) : undefined
+    if (!owner) {
+      sendJson(response, 401, { error: 'invalid token' })
+      return
+    }
+    revokeToken(options.db, tokenHash)
+    sendJson(response, 200, { ok: true })
     return
   }
 
@@ -142,14 +172,14 @@ async function handleEmailVerify(options: GatewayOptions, request: IncomingMessa
   const account = findOrCreateAccountForIdentity(options.db, 'email', email, displayNameForEmail(email))
   const secret = generateTokenSecret()
   storeToken(options.db, { userId: account.id, label: 'email-login', tokenHash: hashToken(secret) })
-  sendJson(response, 200, { token: secret, displayName: account.displayName })
+  sendJson(response, 200, { token: secret, displayName: account.displayName, accountId: account.id })
 }
 
 function displayNameForEmail(email: string): string {
   return email.split('@')[0].slice(0, 32) || 'Mareo 用户'
 }
 
-async function readJsonBody(request: IncomingMessage): Promise<{ email?: unknown; code?: unknown } | undefined> {
+async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown> | undefined> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request as AsyncIterable<Buffer>) {
@@ -158,7 +188,7 @@ async function readJsonBody(request: IncomingMessage): Promise<{ email?: unknown
     chunks.push(chunk)
   }
   try {
-    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { email?: unknown; code?: unknown }
+    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
     return parsed
   } catch {
     return undefined

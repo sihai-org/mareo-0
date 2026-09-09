@@ -96,10 +96,12 @@ test('rejects unauthenticated model requests', async () => {
   assert.equal(response.status, 401)
 })
 
-test('/me returns the token owner', async () => {
+test('/me returns the token owner with its account id', async () => {
   const response = await fetch(`${gatewayUrl}/me`, { headers: { authorization: `Bearer ${token}` } })
   assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { displayName: 'E2E User' })
+  const body = (await response.json()) as { displayName: string; accountId: string }
+  assert.equal(body.displayName, 'E2E User')
+  assert.equal(typeof body.accountId, 'string')
 })
 
 test('proxies a chat completion and records usage with the owner and model', async () => {
@@ -151,4 +153,24 @@ test('enforces the per-user daily limit', async () => {
     await close(limited)
     limitedDb.close()
   }
+})
+
+test('renames the account and signs out (revokes) the current token', async () => {
+  const secret = 'account-ops-secret'
+  await issueToken(db, 'Ops User', secret)
+  const auth = { authorization: `Bearer ${secret}` }
+
+  const rename = await fetch(`${gatewayUrl}/account/name`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ displayName: '新名字' }),
+  })
+  assert.equal(rename.status, 200)
+  const me = await fetch(`${gatewayUrl}/me`, { headers: auth })
+  assert.equal(((await me.json()) as { displayName: string }).displayName, '新名字')
+
+  const signOut = await fetch(`${gatewayUrl}/account/sign-out`, { method: 'POST', headers: auth })
+  assert.equal(signOut.status, 200)
+  const after = await fetch(`${gatewayUrl}/me`, { headers: auth })
+  assert.equal(after.status, 401)
 })

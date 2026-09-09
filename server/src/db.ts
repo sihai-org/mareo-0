@@ -256,3 +256,15 @@ export function findTokenOwner(db: GatewayDatabase, tokenHash: string): TokenOwn
   if (row === undefined) return undefined
   return { userId: row.userId, displayName: row.displayName }
 }
+
+export function renameAccount(db: GatewayDatabase, accountId: string, displayName: string): void {
+  db.prepare('UPDATE users SET displayName = ? WHERE id = ?').run(displayName, accountId)
+}
+
+/** Revokes one bearer token (e.g. "sign out on this device"). */
+export function revokeToken(db: GatewayDatabase, tokenHash: string): boolean {
+  const result = db
+    .prepare('UPDATE tokens SET revokedAt = ? WHERE tokenHash = ? AND revokedAt IS NULL')
+    .run(new Date().toISOString(), tokenHash)
+  return result.changes > 0
+}

@@ -68,13 +68,17 @@ test('email code flow signs a brand-new account in', async () => {
     body: JSON.stringify({ email: 'newuser@mareo.cn', code: sentCode }),
   })
   assert.equal(verify.status, 200)
-  const { token, displayName } = (await verify.json()) as { token: string; displayName: string }
+  const { token, displayName, accountId } = (await verify.json()) as { token: string; displayName: string; accountId: string }
+  assert.equal(typeof accountId, 'string')
   assert.equal(displayName, 'newuser')
   assert.ok(token.length > 10)
 
+  assert.equal(typeof (await send.json()).ok !== undefined, true)
   const me = await fetch(`${url}/me`, { headers: { authorization: `Bearer ${token}` } })
   assert.equal(me.status, 200)
-  assert.deepEqual(await me.json(), { displayName: 'newuser' })
+  const meBody = (await me.json()) as { displayName: string; accountId: string }
+  assert.equal(meBody.displayName, 'newuser')
+  assert.equal(typeof meBody.accountId, 'string')
 })
 
 test('wrong codes and bad requests are rejected', async () => {
