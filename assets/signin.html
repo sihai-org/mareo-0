@@ -12,116 +12,168 @@
       :root {
         color-scheme: light dark;
         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
-        background: Canvas;
-        color: CanvasText;
+        --background: #fafbff;
+        --surface: #ffffff;
+        --text: #202238;
+        --muted: #71768b;
+        --border: #dde1ed;
+        --accent: #5752d9;
+        --accent-hover: #4944c2;
+        --tint: #efeffb;
+        --focus: #5752d926;
+        --error: #b83445;
+        --success: #247456;
+        background: var(--background);
+        color: var(--text);
       }
+
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
 
       body {
         min-height: 100vh;
         margin: 0;
+        padding: 28px 24px;
         display: grid;
         place-items: center;
+        background: radial-gradient(ellipse at 50% 0%, var(--tint), transparent 65%);
       }
 
       main {
-        width: 320px;
-        display: grid;
-        justify-items: stretch;
-        gap: 14px;
-        text-align: center;
+        width: min(100%, 344px);
       }
 
-      img { justify-self: center; }
+      header { text-align: center; margin-bottom: 32px; }
+      header img { display: block; margin: 0 auto 16px; }
+      h1 { margin: 0; font-size: 26px; line-height: 1.4; font-weight: 600; letter-spacing: -0.7px; }
+      p.hint { margin: 9px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 
-      h1 { margin: 0; font-size: 18px; font-weight: 600; }
-
-      p.hint {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.5;
-        opacity: 0.7;
+      section {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-height: 342px;
       }
-
       .row { display: grid; gap: 8px; text-align: left; }
-
-      label { font-size: 13px; opacity: 0.85; }
+      label { font-size: 13px; font-weight: 500; line-height: 20px; }
+      .code-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 10px; }
 
       input {
-        padding: 9px 10px;
+        width: 100%;
+        min-width: 0;
+        height: 46px;
+        padding: 12px 14px;
         font-size: 14px;
-        border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
-        border-radius: 8px;
-        background: Canvas;
-        color: CanvasText;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
         font-family: inherit;
+        transition: border-color 150ms, box-shadow 150ms;
       }
-
+      input::placeholder { color: var(--muted); opacity: 1; }
       input:focus {
-        outline: 2px solid color-mix(in srgb, CanvasText 45%, transparent);
-        outline-offset: 1px;
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--focus);
       }
+      #code { font-variant-numeric: tabular-nums; }
 
       button {
-        padding: 9px 10px;
+        min-height: 46px;
+        padding: 12px 14px;
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 550;
         border: none;
-        border-radius: 8px;
-        background: CanvasText;
-        color: Canvas;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
         cursor: pointer;
         font-family: inherit;
+        transition: background 150ms, box-shadow 150ms;
       }
-
-      button:disabled { opacity: 0.55; cursor: default; }
-
+      button:hover:not(:disabled) { background: var(--accent-hover); }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      button:disabled { opacity: 0.6; cursor: default; }
+      .primary { width: 100%; box-shadow: 0 3px 9px var(--focus); }
       button.send {
-        background: color-mix(in srgb, CanvasText 12%, transparent);
-        color: CanvasText;
-        border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
+        background: var(--tint);
+        color: var(--accent);
+        border: 1px solid var(--border);
         white-space: nowrap;
-        padding: 9px 12px;
+        padding: 10px 8px;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
       }
-
-      a.link {
-        font-size: 12.5px;
-        color: color-mix(in srgb, CanvasText 65%, transparent);
-        cursor: pointer;
-        text-decoration: underline;
-        text-underline-offset: 3px;
+      button.send:hover:not(:disabled) { background: var(--focus); }
+      button.link {
+        align-self: center;
+        margin-top: auto;
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 400;
+        background: transparent;
+        color: var(--muted);
       }
-
+      button.link:hover { background: var(--tint); color: var(--accent); }
       p.status {
         margin: 0;
+        color: var(--muted);
         font-size: 13px;
-        line-height: 1.4;
-        min-height: 2.6em;
+        line-height: 1.65;
+        min-height: 44px;
         white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
+      p.status.error { color: var(--error); }
+      p.status.ok { color: var(--success); }
+      .token-hint { margin: 0; font-size: 13px; line-height: 1.7; color: var(--muted); }
 
-      p.status.error { color: #c0392b; }
-      p.status.ok { color: #1e7d32; }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #191a24;
+          --surface: #232531;
+          --text: #eeedf7;
+          --muted: #a1a6bc;
+          --border: #3c3f53;
+          --accent: #a6a0ff;
+          --accent-hover: #bbb6ff;
+          --tint: #2b2942;
+          --focus: #a6a0ff26;
+          --error: #ff9aa8;
+          --success: #87d7b6;
+        }
+        .primary { color: #201d3b; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        input, button { transition: none; }
+      }
     </style>
   </head>
   <body>
     <main>
-      <img src="logo-white.png" alt="Mareo" width="72" height="72" />
-      <h1>登录 Mareo</h1>
-      <p class="hint">使用邮箱验证码登录，无需设置密码。</p>
+      <header>
+        <img src="logo.png" alt="" width="64" height="64" />
+        <h1>欢迎使用 Mareo</h1>
+        <p class="hint">登录你的账号，让想法继续向前。</p>
+      </header>
 
       <section id="email-mode">
         <div class="row">
           <label for="email">邮箱</label>
           <input id="email" type="email" placeholder="name@example.com" autocomplete="email" spellcheck="false" />
         </div>
-        <button id="send-code" class="send" type="button">发送验证码</button>
         <div class="row">
           <label for="code">验证码</label>
-          <input id="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+          <div class="code-row">
+            <input id="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+            <button id="send-code" class="send" type="button">发送验证码</button>
+          </div>
         </div>
-        <button id="email-sign-in" type="button">登录</button>
+        <button id="email-sign-in" class="primary" type="button">登录 Mareo</button>
         <p class="status" id="email-status" role="status"></p>
-        <a class="link" id="show-token">使用访问令牌登录</a>
+        <button class="link" id="show-token" type="button">使用访问令牌登录</button>
       </section>
 
       <section id="token-mode" hidden>
@@ -129,9 +181,10 @@
           <label for="token">访问令牌</label>
           <input id="token" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" spellcheck="false" />
         </div>
-        <button id="token-sign-in" type="button">登录</button>
+        <p class="token-hint">使用管理员提供的访问令牌登录。<br>已有邮箱账号？可切回邮箱验证码登录。</p>
+        <button id="token-sign-in" class="primary" type="button">登录 Mareo</button>
         <p class="status" id="token-status" role="status"></p>
-        <a class="link" id="show-email">← 邮箱验证码登录</a>
+        <button class="link" id="show-email" type="button">返回邮箱验证码登录</button>
       </section>
     </main>
     <script>
