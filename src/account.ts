@@ -10,24 +10,29 @@ import path from 'node:path'
 export const GATEWAY_URL =
   process.env.MAREO_GATEWAY_URL ?? (app.isPackaged ? 'https://api.svc.mareo.cn' : 'http://127.0.0.1:3000')
 
+export interface AccountSession {
+  token: string
+  accountId: string
+}
+
 const ACCOUNT_FILE = 'account.dat'
 
 function accountPath(): string {
   return path.join(app.getPath('userData'), ACCOUNT_FILE)
 }
 
-function decodeStored(raw: string): { token?: string } | undefined {
+function decodeStored(raw: string): Partial<AccountSession> | undefined {
   try {
     const json = safeStorage.isEncryptionAvailable()
       ? safeStorage.decryptString(Buffer.from(raw, 'base64'))
       : Buffer.from(raw, 'base64').toString('utf8')
-    return JSON.parse(json) as { token?: string }
+    return JSON.parse(json) as Partial<AccountSession>
   } catch {
     return undefined
   }
 }
 
-export function loadAccountToken(): string | undefined {
+export function loadAccountSession(): AccountSession | undefined {
   let raw: string
   try {
     raw = readFileSync(accountPath(), 'utf8')
@@ -35,14 +40,14 @@ export function loadAccountToken(): string | undefined {
     return undefined
   }
   const account = decodeStored(raw)
-  return typeof account?.token === 'string' && account.token !== '' ? account.token : undefined
+  if (typeof account?.token !== 'string' || account.token === '') return undefined
+  return { token: account.token, accountId: typeof account.accountId === 'string' ? account.accountId : '' }
 }
 
-export function saveAccountToken(token: string): void {
-  const json = JSON.stringify({ token })
+export function saveAccountSession(session: AccountSession): void {
   const raw = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(json).toString('base64')
-    : Buffer.from(json, 'utf8').toString('base64')
+    ? safeStorage.encryptString(JSON.stringify(session)).toString('base64')
+    : Buffer.from(JSON.stringify(session), 'utf8').toString('base64')
   mkdirSync(path.dirname(accountPath()), { recursive: true })
   writeFileSync(accountPath(), raw, { mode: 0o600 })
 }
@@ -56,7 +61,7 @@ export function clearAccount(): void {
 }
 
 export type TokenCheck =
-  | { valid: true; displayName: string }
+  | { valid: true; displayName: string; accountId: string }
   | { valid: false; reason: 'invalid' | 'unreachable' }
 
 export async function checkToken(token: string): Promise<TokenCheck> {
@@ -66,8 +71,12 @@ export async function checkToken(token: string): Promise<TokenCheck> {
       signal: AbortSignal.timeout(8_000),
     })
     if (response.status === 200) {
-      const body = (await response.json()) as { displayName?: string }
-      return { valid: true, displayName: body.displayName ?? 'Mareo user' }
+      const body = (await response.json()) as { displayName?: string; accountId?: string }
+      return {
+        valid: true,
+        displayName: body.displayName ?? 'Mareo user',
+        accountId: typeof body.accountId === 'string' ? body.accountId : '',
+      }
     }
     if (response.status === 401) return { valid: false, reason: 'invalid' }
     return { valid: false, reason: 'unreachable' }
@@ -100,7 +109,7 @@ export async function requestEmailCode(email: string): Promise<EmailCodeRequest>
 }
 
 export type EmailSignIn =
-  | { ok: true; token: string; displayName: string }
+  | { ok: true; token: string; displayName: string; accountId: string }
   | {
       ok: false
       reason: 'no-code' | 'expired' | 'too-many-attempts' | 'wrong-code' | 'invalid-request' | 'unreachable'
@@ -115,9 +124,14 @@ export async function signInWithEmailCode(email: string, code: string): Promise<
       signal: AbortSignal.timeout(10_000),
     })
     if (response.status === 200) {
-      const body = (await response.json()) as { token?: string; displayName?: string }
+      const body = (await response.json()) as { token?: string; displayName?: string; accountId?: string }
       if (typeof body.token !== 'string') return { ok: false, reason: 'unreachable' }
-      return { ok: true, token: body.token, displayName: body.displayName ?? 'Mareo user' }
+      return {
+        ok: true,
+        token: body.token,
+        displayName: body.displayName ?? 'Mareo user',
+        accountId: typeof body.accountId === 'string' ? body.accountId : '',
+      }
     }
     const body = (await response.json().catch(() => ({}))) as { error?: string }
     const reason = body.error ?? ''

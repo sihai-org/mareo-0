@@ -4,11 +4,13 @@ import {
   checkToken,
   clearAccount,
   GATEWAY_URL,
-  loadAccountToken,
+  loadAccountSession,
   requestEmailCode,
-  saveAccountToken,
+  saveAccountSession,
   signInWithEmailCode,
+  type AccountSession,
 } from './account.js'
+import { accountHomePath, migrateLegacyHomeOnce } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 
 let mainWindow: BrowserWindow | undefined
@@ -18,7 +20,7 @@ let shutdownComplete = false
 // not quit merely because all (gate) windows closed on a successful sign-in.
 let signInActive = false
 
-app.setName("Mareo");
+app.setName('Mareo')
 // Keep existing installations' data independent of the display name.
 app.setPath('userData', path.join(app.getPath('appData'), 'Mareo'))
 
@@ -49,18 +51,30 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
+function legacyDshHome(): string {
+  return path.join(app.getPath('userData'), 'dsh')
+}
+
+/** Per-account DSH_HOME; the first account migrates the legacy shared home. */
+async function resolveDshHome(accountId: string): Promise<string> {
+  const dshBase = legacyDshHome()
+  const home = accountHomePath(dshBase, accountId)
+  await migrateLegacyHomeOnce(dshBase, home)
+  return home
+}
+
 async function startMareo(): Promise<void> {
   app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'app-icon.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
-  const accountToken = await acquireAccountToken()
-  if (!accountToken) {
+  const account = await acquireAccountSession()
+  if (!account) {
     app.quit()
     return
   }
 
   mainWindow = new BrowserWindow({
-    title: "Mareo",
+    title: 'Mareo',
     width: 1280,
     height: 820,
     minWidth: 900,
@@ -72,10 +86,10 @@ async function startMareo(): Promise<void> {
       sandbox: true,
       webSecurity: true,
     },
-  });
+  })
   mainWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    mainWindow?.setTitle("Mareo");
+    mainWindow?.setTitle('Mareo')
   })
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   await mainWindow.loadFile(path.join(app.getAppPath(), 'assets', 'startup.html'))
@@ -85,15 +99,16 @@ async function startMareo(): Promise<void> {
       const runtimeDirectory = app.isPackaged
         ? process.resourcesPath
         : path.join(app.getAppPath(), '.staging')
+      const dshHome = account.accountId ? await resolveDshHome(account.accountId) : legacyDshHome()
       dshRuntime = await startDshRuntime({
         runtimeDirectory: path.join(runtimeDirectory, 'dsh-runtime'),
         nodeExecutable: path.join(runtimeDirectory, 'node-runtime', 'bin', 'node'),
-        dshHome: path.join(app.getPath('userData'), 'dsh'),
+        dshHome,
         workingDirectory: app.getPath('home'),
         logFile: path.join(app.getPath('userData'), 'logs', 'mareo.log'),
         env: {
           // Model credentials come from the account, never from the user.
-          DEEPSEEK_API_KEY: accountToken,
+          DEEPSEEK_API_KEY: account.token,
           DEEPSEEK_BASE_URL: GATEWAY_URL,
         },
         onUnexpectedExit: showUnexpectedExit,
@@ -105,14 +120,14 @@ async function startMareo(): Promise<void> {
       await dshRuntime?.stop()
       dshRuntime = undefined
       const choice = await dialog.showMessageBox(mainWindow, {
-        type: "error",
-        title: "Mareo could not start",
-        message: "DeepSeek Harness failed to start.",
+        type: 'error',
+        title: 'Mareo could not start',
+        message: 'DeepSeek Harness failed to start.',
         detail: error instanceof Error ? error.message : String(error),
-        buttons: ["Retry", "Quit"],
+        buttons: ['Retry', 'Quit'],
         defaultId: 0,
         cancelId: 1,
-      });
+      })
       if (choice.response === 1) {
         app.quit()
         return
@@ -122,38 +137,43 @@ async function startMareo(): Promise<void> {
 }
 
 /**
- * Returns the gateway token to use for this launch, showing the sign-in screen
- * when no valid account is stored. Returns undefined when the user quits.
+ * Returns the account for this launch, showing the sign-in screen when no
+ * valid account is stored. Returns undefined when the user quits.
  */
-async function acquireAccountToken(): Promise<string | undefined> {
-  const stored = loadAccountToken()
-  if (stored) {
-    const check = await checkToken(stored)
-    if (check.valid) return stored
+async function acquireAccountSession(): Promise<AccountSession | undefined> {
+  const stored = loadAccountSession()
+  if (stored && stored.token) {
+    const check = await checkToken(stored.token)
+    if (check.valid) {
+      // Refresh the account id (older stored sessions did not keep one).
+      const account = { token: stored.token, accountId: check.accountId }
+      if (account.accountId !== stored.accountId) saveAccountSession(account)
+      return account
+    }
     if (check.reason === 'invalid') {
       // A revoked token is no longer usable; fall through to sign-in.
       clearAccount()
     } else {
-      // The gateway is unreachable right now: keep the stored token and let the
-      // DSH boot flow surface the connection problem with its own retry dialog.
+      // The gateway is unreachable right now: keep the stored session and let
+      // the DSH boot flow surface the connection problem with its retry dialog.
       return stored
     }
   }
-  return promptForToken()
+  return promptForSignIn()
 }
 
-function promptForToken(): Promise<string | undefined> {
+function promptForSignIn(): Promise<AccountSession | undefined> {
   signInActive = true
   const handlers = ['mareo:sign-in', 'mareo:send-code', 'mareo:email-sign-in']
   return new Promise((resolve) => {
     let settled = false
-    const settle = (token?: string): void => {
+    const settle = (account?: AccountSession): void => {
       if (settled) return
       settled = true
       for (const name of handlers) ipcMain.removeHandler(name)
       if (!signInWindow.isDestroyed()) signInWindow.destroy()
       signInActive = false
-      resolve(token)
+      resolve(account)
     }
 
     const signInWindow = new BrowserWindow({
@@ -187,8 +207,9 @@ function promptForToken(): Promise<string | undefined> {
           error: check.reason === 'invalid' ? '该访问令牌无效，请联系管理员。' : gatewayError,
         }
       }
-      saveAccountToken(token)
-      settle(token)
+      const account = { token, accountId: check.accountId }
+      saveAccountSession(account)
+      settle(account)
       return { ok: true }
     })
 
@@ -224,8 +245,9 @@ function promptForToken(): Promise<string | undefined> {
         }
         return { ok: false, error: messages[result.reason] }
       }
-      saveAccountToken(result.token)
-      settle(result.token)
+      const account = { token: result.token, accountId: result.accountId }
+      saveAccountSession(account)
+      settle(account)
       return { ok: true }
     })
 
@@ -255,19 +277,16 @@ function showUnexpectedExit(message: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
   void dialog
     .showMessageBox(mainWindow, {
-      type: "error",
-      title: "Mareo stopped",
+      type: 'error',
+      title: 'Mareo stopped',
       message,
-      detail: `The current log is stored at ${path.join(app.getPath("userData"), "logs", "mareo.log")}.`,
-      buttons: ["Quit"],
+      detail: `The current log is stored at ${path.join(app.getPath('userData'), 'logs', 'mareo.log')}.`,
+      buttons: ['Quit'],
     })
-    .then(() => app.quit());
+    .then(() => app.quit())
 }
 
 function showFatalError(error: unknown): void {
-  dialog.showErrorBox(
-    "Mareo could not start",
-    error instanceof Error ? error.message : String(error),
-  );
+  dialog.showErrorBox('Mareo could not start', error instanceof Error ? error.message : String(error))
   app.quit()
 }
