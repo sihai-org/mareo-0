@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import { hashToken } from '../src/auth.js'
-import { createUser, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
+import { createTokenAccount, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
 import { createGatewayServer } from '../src/server.js'
 import { countRequestsSince, startOfUtcDay } from '../src/usage.js'
 
@@ -57,7 +57,7 @@ function close(server: Server): Promise<void> {
 }
 
 async function issueToken(db: GatewayDatabase, displayName: string, secret: string): Promise<string> {
-  const userId = createUser(db, { displayName, provider: 'token' })
+  const userId = createTokenAccount(db, displayName)
   storeToken(db, { userId, label: `${displayName} token`, tokenHash: hashToken(secret) })
   return userId
 }

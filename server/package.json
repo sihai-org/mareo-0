@@ -16,6 +16,10 @@
   },
   "devDependencies": {
     "@types/node": "26.4.1",
+    "@types/nodemailer": "^8.0.1",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "nodemailer": "^10.0.1"
   }
 }

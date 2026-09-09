@@ -9,10 +9,17 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   displayName TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  subject TEXT,
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS identities (
+  accountId TEXT NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL,
+  subject TEXT,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (provider, subject)
+);
+CREATE INDEX IF NOT EXISTS idx_identities_account ON identities(accountId);
 
 CREATE TABLE IF NOT EXISTS tokens (
   id TEXT PRIMARY KEY,
@@ -34,32 +41,188 @@ CREATE TABLE IF NOT EXISTS usage (
   latencyMs INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS auth_codes (
+  channel TEXT NOT NULL,
+  target TEXT NOT NULL,
+  codeHash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  expiresAt TEXT NOT NULL,
+  sentAt TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (channel, target)
+);
+
+CREATE TABLE IF NOT EXISTS auth_sends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel TEXT NOT NULL,
+  target TEXT NOT NULL,
+  sentAt TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tokens_tokenHash ON tokens(tokenHash);
 CREATE INDEX IF NOT EXISTS idx_usage_userId_ts ON usage(userId, ts);
 `
 
+const SCHEMA_VERSION = 2
+
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })
   const db = new DatabaseSync(dbPath)
-  db.exec(SCHEMA)
+  const version = db.prepare('PRAGMA user_version').get() as { user_version: number }
+  if (version.user_version < SCHEMA_VERSION) {
+    migrate(db)
+    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+  } else {
+    db.exec(SCHEMA)
+  }
   return db
 }
 
-export interface NewUser {
-  displayName: string
-  provider: string
-  subject?: string | null
+/**
+ * Brings a legacy database (v1: `users` carried provider/subject columns) up
+ * to v2 (one `users` row per account plus an `identities` table). Account ids
+ * are preserved so existing tokens and usage rows keep pointing at the same
+ * user; token-issued users become token identities.
+ */
+function migrate(db: GatewayDatabase): void {
+  const users = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get()
+  const fresh = users === undefined
+  if (fresh) {
+    db.exec(SCHEMA)
+    return
+  }
+  const columns = db.prepare('PRAGMA table_info(users)').all() as { name: string }[]
+  const legacy = columns.some((column) => column.name === 'provider')
+  if (!legacy) {
+    db.exec(SCHEMA)
+    return
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF')
+  db.exec('BEGIN')
+  try {
+    // Renaming `users` makes the child tables' foreign keys follow the new
+    // name, so tokens/usage are rebuilt around the fresh accounts schema too.
+    db.exec('ALTER TABLE tokens RENAME TO tokens_legacy')
+    db.exec('ALTER TABLE usage RENAME TO usage_legacy')
+    db.exec('ALTER TABLE users RENAME TO users_legacy')
+    db.exec(SCHEMA)
+
+    const legacyUsers = db
+      .prepare('SELECT id, displayName, provider, subject, createdAt FROM users_legacy')
+      .all() as { id: string; displayName: string; provider: string; subject: string | null; createdAt: string }[]
+    const insertUser = db.prepare('INSERT INTO users (id, displayName, createdAt) VALUES (?, ?, ?)')
+    const insertIdentity = db.prepare('INSERT INTO identities (accountId, provider, subject) VALUES (?, ?, ?)')
+    for (const row of legacyUsers) {
+      insertUser.run(row.id, row.displayName, row.createdAt)
+      insertIdentity.run(row.id, row.provider, row.subject)
+    }
+
+    const legacyTokens = db
+      .prepare('SELECT id, userId, tokenHash, label, createdAt, revokedAt FROM tokens_legacy')
+      .all() as {
+      id: string
+      userId: string
+      tokenHash: string
+      label: string
+      createdAt: string
+      revokedAt: string | null
+    }[]
+    const insertToken = db.prepare(
+      'INSERT INTO tokens (id, userId, tokenHash, label, createdAt, revokedAt) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    for (const row of legacyTokens) {
+      insertToken.run(row.id, row.userId, row.tokenHash, row.label, row.createdAt, row.revokedAt)
+    }
+
+    const legacyUsage = db
+      .prepare(
+        'SELECT userId, ts, model, promptChars, completionChars, status, latencyMs FROM usage_legacy',
+      )
+      .all() as {
+      userId: string
+      ts: string
+      model: string | null
+      promptChars: number
+      completionChars: number
+      status: number
+      latencyMs: number
+    }[]
+    const insertUsage = db.prepare(
+      `INSERT INTO usage (userId, ts, model, promptChars, completionChars, status, latencyMs)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    for (const row of legacyUsage) {
+      insertUsage.run(row.userId, row.ts, row.model, row.promptChars, row.completionChars, row.status, row.latencyMs)
+    }
+
+    db.exec('DROP TABLE users_legacy')
+    db.exec('DROP TABLE tokens_legacy')
+    db.exec('DROP TABLE usage_legacy')
+    db.exec('COMMIT')
+    db.exec('PRAGMA foreign_keys = ON')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    db.exec('PRAGMA foreign_keys = ON')
+    throw error
+  }
 }
 
-export function createUser(db: GatewayDatabase, user: NewUser): string {
+export interface Account {
+  id: string
+  displayName: string
+  createdAt: string
+}
+
+export function createAccount(db: GatewayDatabase, displayName: string): string {
   const id = randomUUID()
-  db.prepare('INSERT INTO users (id, displayName, provider, subject) VALUES (?, ?, ?, ?)').run(
-    id,
-    user.displayName,
-    user.provider,
-    user.subject ?? null,
-  )
+  db.prepare('INSERT INTO users (id, displayName) VALUES (?, ?)').run(id, displayName)
   return id
+}
+
+export function addIdentity(db: GatewayDatabase, accountId: string, provider: string, subject: string | null): void {
+  db.prepare('INSERT INTO identities (accountId, provider, subject) VALUES (?, ?, ?)').run(accountId, provider, subject)
+}
+
+/** Creates an account carrying a legacy token identity (admin-issued tokens). */
+export function createTokenAccount(db: GatewayDatabase, displayName: string): string {
+  const accountId = createAccount(db, displayName)
+  addIdentity(db, accountId, 'token', null)
+  return accountId
+}
+
+export function findAccountByIdentity(
+  db: GatewayDatabase,
+  provider: string,
+  subject: string | null,
+): Account | undefined {
+  const row = db
+    .prepare(
+      `SELECT u.id AS id, u.displayName AS displayName, u.createdAt AS createdAt
+       FROM identities i JOIN users u ON u.id = i.accountId
+       WHERE i.provider = ? AND i.subject IS ?`,
+    )
+    .get(provider, subject) as { id: string; displayName: string; createdAt: string } | undefined
+  if (row === undefined) return undefined
+  return { id: row.id, displayName: row.displayName, createdAt: row.createdAt }
+}
+
+/**
+ * Returns the account bound to an identity, creating both when they do not
+ * exist yet (first login via that provider/subject auto-registers).
+ */
+export function findOrCreateAccountForIdentity(
+  db: GatewayDatabase,
+  provider: string,
+  subject: string,
+  displayNameForNew: string,
+): Account {
+  const existing = findAccountByIdentity(db, provider, subject)
+  if (existing !== undefined) return existing
+  const accountId = createAccount(db, displayNameForNew)
+  addIdentity(db, accountId, provider, subject)
+  const created = findAccountByIdentity(db, provider, subject)
+  if (created !== undefined) return created
+  throw new Error('Failed to read back the created account identity.')
 }
 
 export interface StoredToken {

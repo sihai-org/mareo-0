@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { createUser, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
+import { createTokenAccount, findAccountByIdentity, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
 import { hashToken } from '../src/auth.js'
 import { countRequestsSince, recordUsage, startOfUtcDay } from '../src/usage.js'
 
@@ -23,7 +23,7 @@ test.after(() => {
 })
 
 test('issues a token that resolves to its owner and rejects unknown hashes', () => {
-  const userId = createUser(db, { displayName: 'Ada', provider: 'token' })
+  const userId = createTokenAccount(db, 'Ada')
   const secret = 'test-secret'
   storeToken(db, { userId, label: 'Ada token', tokenHash: hashToken(secret) })
 
@@ -32,11 +32,11 @@ test('issues a token that resolves to its owner and rejects unknown hashes', () 
 })
 
 test('records usage and counts requests since a timestamp', () => {
-  const userId = createUser(db, { displayName: 'Grace', provider: 'token' })
+  const userId = createTokenAccount(db, 'Grace')
   const before = startOfUtcDay()
   recordUsage(db, { userId, model: 'deepseek-chat', promptChars: 10, completionChars: 20, status: 200, latencyMs: 5 })
   recordUsage(db, { userId, model: 'deepseek-reasoner', promptChars: 3, completionChars: 7, status: 429, latencyMs: 1 })
 
   assert.equal(countRequestsSince(db, userId, before), 2)
-  assert.equal(countRequestsSince(db, createUser(db, { displayName: 'Nobody', provider: 'token' }), before), 0)
+  assert.equal(countRequestsSince(db, createTokenAccount(db, 'Nobody'), before), 0)
 })

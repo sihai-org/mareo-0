@@ -1,4 +1,4 @@
-import { createUser, openDatabase, storeToken, type GatewayDatabase } from './db.js'
+import { createTokenAccount, openDatabase, storeToken, type GatewayDatabase } from './db.js'
 import { generateTokenSecret, hashToken } from './auth.js'
 
 interface CliArguments {
@@ -20,7 +20,7 @@ function parseArguments(argv: string[]): CliArguments {
 
 const { label, dbPath } = parseArguments(process.argv.slice(2))
 const db: GatewayDatabase = openDatabase(dbPath)
-const userId = createUser(db, { displayName: label, provider: 'token' })
+const userId = createTokenAccount(db, label)
 const secret = generateTokenSecret()
 storeToken(db, { userId, label, tokenHash: hashToken(secret) })
 db.close()
