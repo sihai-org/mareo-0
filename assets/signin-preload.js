@@ -1,8 +1,10 @@
-// Sandboxed preload for the Mareo sign-in screen. It only exposes a single
-// "submit this token" call to the page; validation and storage happen in the
-// main process, so the renderer never touches the gateway directly.
+// Sandboxed preload for the Mareo sign-in screen. It only exposes the three
+// actions the page needs; validation and storage happen in the main process,
+// so the renderer never talks to the gateway directly.
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('mareo', {
   signIn: (token) => ipcRenderer.invoke('mareo:sign-in', token),
+  sendCode: (email) => ipcRenderer.invoke('mareo:send-code', email),
+  emailSignIn: (email, code) => ipcRenderer.invoke('mareo:email-sign-in', email, code),
 })

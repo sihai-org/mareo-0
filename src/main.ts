@@ -5,7 +5,9 @@ import {
   clearAccount,
   GATEWAY_URL,
   loadAccountToken,
+  requestEmailCode,
   saveAccountToken,
+  signInWithEmailCode,
 } from './account.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 
@@ -142,21 +144,22 @@ async function acquireAccountToken(): Promise<string | undefined> {
 
 function promptForToken(): Promise<string | undefined> {
   signInActive = true
+  const handlers = ['mareo:sign-in', 'mareo:send-code', 'mareo:email-sign-in']
   return new Promise((resolve) => {
     let settled = false
     const settle = (token?: string): void => {
       if (settled) return
       settled = true
-      ipcMain.removeHandler('mareo:sign-in')
+      for (const name of handlers) ipcMain.removeHandler(name)
       if (!signInWindow.isDestroyed()) signInWindow.destroy()
       signInActive = false
       resolve(token)
     }
 
     const signInWindow = new BrowserWindow({
-      title: 'Sign in to Mareo',
-      width: 420,
-      height: 560,
+      title: '登录 Mareo',
+      width: 440,
+      height: 640,
       resizable: false,
       show: false,
       webPreferences: {
@@ -170,21 +173,59 @@ function promptForToken(): Promise<string | undefined> {
     signInWindow.on('closed', () => settle(undefined))
     signInWindow.once('ready-to-show', () => signInWindow.show())
 
+    const gatewayError = `无法连接 Mareo 服务（${GATEWAY_URL}），请稍后重试。`
+
     ipcMain.handle('mareo:sign-in', async (_event, rawToken: unknown) => {
       if (typeof rawToken !== 'string' || rawToken.trim() === '') {
-        return { ok: false, error: 'Enter your access token first.' }
+        return { ok: false, error: '请输入访问令牌。' }
       }
       const token = rawToken.trim()
       const check = await checkToken(token)
       if (!check.valid) {
-        const error =
-          check.reason === 'invalid'
-            ? 'This token is not valid. Check the token with your provider.'
-            : `Cannot reach the Mareo gateway at ${GATEWAY_URL}. Is it running?`
-        return { ok: false, error }
+        return {
+          ok: false,
+          error: check.reason === 'invalid' ? '该访问令牌无效，请联系管理员。' : gatewayError,
+        }
       }
       saveAccountToken(token)
       settle(token)
+      return { ok: true }
+    })
+
+    ipcMain.handle('mareo:send-code', async (_event, rawEmail: unknown) => {
+      if (typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
+        return { ok: false, error: '邮箱地址格式不正确。' }
+      }
+      const result = await requestEmailCode(rawEmail.trim())
+      if (result.ok) return { ok: true }
+      const messages = {
+        cooldown: '发送过于频繁，请 60 秒后再试。',
+        'daily-limit': '该邮箱今日发送次数已达上限，请明天再试。',
+        'invalid-email': '邮箱地址格式不正确。',
+        'delivery-failed': '邮件发送失败，请稍后重试。',
+        unreachable: gatewayError,
+      }
+      return { ok: false, error: messages[result.reason] }
+    })
+
+    ipcMain.handle('mareo:email-sign-in', async (_event, rawEmail: unknown, rawCode: unknown) => {
+      if (typeof rawEmail !== 'string' || typeof rawCode !== 'string') {
+        return { ok: false, error: '请输入邮箱和验证码。' }
+      }
+      const result = await signInWithEmailCode(rawEmail.trim(), rawCode.trim())
+      if (!result.ok) {
+        const messages = {
+          'no-code': '请先获取验证码。',
+          expired: '验证码已过期，请重新获取。',
+          'too-many-attempts': '尝试次数过多，请重新获取验证码。',
+          'wrong-code': '验证码不正确。',
+          'invalid-request': '请求有误，请重试。',
+          unreachable: gatewayError,
+        }
+        return { ok: false, error: messages[result.reason] }
+      }
+      saveAccountToken(result.token)
+      settle(result.token)
       return { ok: true }
     })
 

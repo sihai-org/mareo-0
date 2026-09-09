@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,11 +7,11 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'"
     />
-    <title>Sign in to Mareo</title>
+    <title>登录 Mareo</title>
     <style>
       :root {
         color-scheme: light dark;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
         background: Canvas;
         color: CanvasText;
       }
@@ -31,15 +31,9 @@
         text-align: center;
       }
 
-      img {
-        justify-self: center;
-      }
+      img { justify-self: center; }
 
-      h1 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-      }
+      h1 { margin: 0; font-size: 18px; font-weight: 600; }
 
       p.hint {
         margin: 0;
@@ -48,14 +42,18 @@
         opacity: 0.7;
       }
 
+      .row { display: grid; gap: 8px; text-align: left; }
+
+      label { font-size: 13px; opacity: 0.85; }
+
       input {
         padding: 9px 10px;
-        font-size: 13px;
+        font-size: 14px;
         border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
         border-radius: 8px;
         background: Canvas;
         color: CanvasText;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: inherit;
       }
 
       input:focus {
@@ -72,11 +70,25 @@
         background: CanvasText;
         color: Canvas;
         cursor: pointer;
+        font-family: inherit;
       }
 
-      button:disabled {
-        opacity: 0.55;
-        cursor: default;
+      button:disabled { opacity: 0.55; cursor: default; }
+
+      button.send {
+        background: color-mix(in srgb, CanvasText 12%, transparent);
+        color: CanvasText;
+        border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
+        white-space: nowrap;
+        padding: 9px 12px;
+      }
+
+      a.link {
+        font-size: 12.5px;
+        color: color-mix(in srgb, CanvasText 65%, transparent);
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 3px;
       }
 
       p.status {
@@ -87,58 +99,136 @@
         white-space: pre-wrap;
       }
 
-      p.status.error {
-        color: #c0392b;
-      }
-
-      p.status.ok {
-        color: #1e7d32;
-      }
+      p.status.error { color: #c0392b; }
+      p.status.ok { color: #1e7d32; }
     </style>
   </head>
   <body>
     <main>
       <img src="logo-white.png" alt="Mareo" width="72" height="72" />
-      <h1>Sign in to Mareo</h1>
-      <p class="hint">
-        Mareo routes model access through your account. No API keys needed — paste the
-        access token you received.
-      </p>
-      <input id="token" type="password" placeholder="Paste your Mareo access token" autocomplete="off" spellcheck="false" />
-      <button id="sign-in" type="button">Sign in</button>
-      <p id="status" class="status" role="status"></p>
+      <h1>登录 Mareo</h1>
+      <p class="hint">使用邮箱验证码登录，无需设置密码。</p>
+
+      <section id="email-mode">
+        <div class="row">
+          <label for="email">邮箱</label>
+          <input id="email" type="email" placeholder="name@example.com" autocomplete="email" spellcheck="false" />
+        </div>
+        <button id="send-code" class="send" type="button">发送验证码</button>
+        <div class="row">
+          <label for="code">验证码</label>
+          <input id="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+        </div>
+        <button id="email-sign-in" type="button">登录</button>
+        <p class="status" id="email-status" role="status"></p>
+        <a class="link" id="show-token">使用访问令牌登录</a>
+      </section>
+
+      <section id="token-mode" hidden>
+        <div class="row">
+          <label for="token">访问令牌</label>
+          <input id="token" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" spellcheck="false" />
+        </div>
+        <button id="token-sign-in" type="button">登录</button>
+        <p class="status" id="token-status" role="status"></p>
+        <a class="link" id="show-email">← 邮箱验证码登录</a>
+      </section>
     </main>
     <script>
-      const input = document.getElementById('token')
-      const button = document.getElementById('sign-in')
-      const status = document.getElementById('status')
+      const emailInput = document.getElementById('email')
+      const codeInput = document.getElementById('code')
+      const sendButton = document.getElementById('send-code')
+      const signInButton = document.getElementById('email-sign-in')
+      const emailStatus = document.getElementById('email-status')
+      const emailMode = document.getElementById('email-mode')
+      const tokenMode = document.getElementById('token-mode')
+      const tokenInput = document.getElementById('token')
+      const tokenSignIn = document.getElementById('token-sign-in')
+      const tokenStatus = document.getElementById('token-status')
 
-      async function submit() {
-        const token = input.value.trim()
-        if (!token) {
-          status.textContent = 'Enter your access token first.'
-          status.className = 'status error'
-          return
-        }
-        button.disabled = true
-        status.textContent = 'Verifying…'
-        status.className = 'status'
-        const result = await window.mareo.signIn(token)
-        if (result.ok) {
-          status.textContent = 'Signed in — starting Mareo…'
-          status.className = 'status ok'
-        } else {
-          status.textContent = result.error ?? 'Sign-in failed.'
-          status.className = 'status error'
-          button.disabled = false
-        }
+      function setStatus(element, text, kind) {
+        element.textContent = text
+        element.className = 'status' + (kind ? ' ' + kind : '')
       }
 
-      button.addEventListener('click', submit)
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') submit()
+      sendButton.addEventListener('click', async () => {
+        const email = emailInput.value.trim()
+        if (!email.includes('@')) {
+          setStatus(emailStatus, '请输入正确的邮箱地址。', 'error')
+          return
+        }
+        sendButton.disabled = true
+        setStatus(emailStatus, '正在发送…')
+        const result = await window.mareo.sendCode(email)
+        if (result.ok) {
+          setStatus(emailStatus, '验证码已发送，请查收邮箱（5 分钟内有效）。', 'ok')
+          codeInput.focus()
+          let remaining = 60
+          const tick = setInterval(() => {
+            remaining -= 1
+            if (remaining > 0) {
+              sendButton.textContent = '重新发送（' + remaining + 's）'
+            } else {
+              clearInterval(tick)
+              sendButton.textContent = '发送验证码'
+              sendButton.disabled = false
+            }
+          }, 1000)
+        } else {
+          sendButton.disabled = false
+          setStatus(emailStatus, result.error ?? '发送失败，请稍后重试。', 'error')
+        }
       })
-      input.focus()
+
+      signInButton.addEventListener('click', async () => {
+        const email = emailInput.value.trim()
+        const code = codeInput.value.trim()
+        if (!email.includes('@') || code.length < 6) {
+          setStatus(emailStatus, '请输入邮箱和 6 位验证码。', 'error')
+          return
+        }
+        signInButton.disabled = true
+        setStatus(emailStatus, '正在登录…')
+        const result = await window.mareo.emailSignIn(email, code)
+        if (result.ok) {
+          setStatus(emailStatus, '登录成功，正在启动…', 'ok')
+        } else {
+          signInButton.disabled = false
+          setStatus(emailStatus, result.error ?? '登录失败，请重试。', 'error')
+        }
+      })
+
+      document.getElementById('show-token').addEventListener('click', () => {
+        emailMode.hidden = true
+        tokenMode.hidden = false
+        tokenInput.focus()
+      })
+      document.getElementById('show-email').addEventListener('click', () => {
+        tokenMode.hidden = true
+        emailMode.hidden = false
+        emailInput.focus()
+      })
+
+      tokenSignIn.addEventListener('click', async () => {
+        const token = tokenInput.value.trim()
+        if (!token) {
+          setStatus(tokenStatus, '请输入访问令牌。', 'error')
+          return
+        }
+        tokenSignIn.disabled = true
+        setStatus(tokenStatus, '正在登录…')
+        const result = await window.mareo.signIn(token)
+        if (result.ok) {
+          setStatus(tokenStatus, '登录成功，正在启动…', 'ok')
+        } else {
+          tokenSignIn.disabled = false
+          setStatus(tokenStatus, result.error ?? '登录失败，请重试。', 'error')
+        }
+      })
+
+      emailInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') sendButton.click() })
+      codeInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') signInButton.click() })
+      emailInput.focus()
     </script>
   </body>
 </html>

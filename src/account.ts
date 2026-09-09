@@ -75,3 +75,63 @@ export async function checkToken(token: string): Promise<TokenCheck> {
     return { valid: false, reason: 'unreachable' }
   }
 }
+
+export type EmailCodeRequest =
+  | { ok: true }
+  | { ok: false; reason: 'cooldown' | 'daily-limit' | 'invalid-email' | 'delivery-failed' | 'unreachable' }
+
+export async function requestEmailCode(email: string): Promise<EmailCodeRequest> {
+  try {
+    const response = await fetch(`${GATEWAY_URL}/auth/email/send`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (response.status === 200) return { ok: true }
+    const body = (await response.json().catch(() => ({}))) as { error?: string }
+    if (body.error === 'cooldown' || body.error === 'daily-limit') return { ok: false, reason: body.error }
+    if (body.error === 'invalid-email') return { ok: false, reason: 'invalid-email' }
+    if (body.error === 'delivery-failed') return { ok: false, reason: 'delivery-failed' }
+    return { ok: false, reason: 'unreachable' }
+  } catch {
+    return { ok: false, reason: 'unreachable' }
+  }
+}
+
+export type EmailSignIn =
+  | { ok: true; token: string; displayName: string }
+  | {
+      ok: false
+      reason: 'no-code' | 'expired' | 'too-many-attempts' | 'wrong-code' | 'invalid-request' | 'unreachable'
+    }
+
+export async function signInWithEmailCode(email: string, code: string): Promise<EmailSignIn> {
+  try {
+    const response = await fetch(`${GATEWAY_URL}/auth/email/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (response.status === 200) {
+      const body = (await response.json()) as { token?: string; displayName?: string }
+      if (typeof body.token !== 'string') return { ok: false, reason: 'unreachable' }
+      return { ok: true, token: body.token, displayName: body.displayName ?? 'Mareo user' }
+    }
+    const body = (await response.json().catch(() => ({}))) as { error?: string }
+    const reason = body.error ?? ''
+    if (
+      reason === 'no-code' ||
+      reason === 'expired' ||
+      reason === 'too-many-attempts' ||
+      reason === 'wrong-code' ||
+      reason === 'invalid-request'
+    ) {
+      return { ok: false, reason }
+    }
+    return { ok: false, reason: 'unreachable' }
+  } catch {
+    return { ok: false, reason: 'unreachable' }
+  }
+}
