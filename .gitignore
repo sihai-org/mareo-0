@@ -151,3 +151,6 @@ server/data/
 # Mareo gateway deployment runtime data
 server/deploy/data/
 server/deploy/backups/
+
+# Release credentials (one-click publish)
+.release.env

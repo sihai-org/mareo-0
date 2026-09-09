@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "make": "npm run build && npm run stage:runtime && electron-forge make --arch=arm64",
     "verify:package": "node scripts/verify-runtime.mjs out/Mareo-darwin-arm64/Mareo.app/Contents/Resources",
+    "release": "node scripts/release.mjs",
     "server:start": "npm --prefix server run start",
     "server:issue-token": "npm --prefix server run issue-token",
     "server:test": "npm --prefix server run test"
