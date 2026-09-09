@@ -16,6 +16,8 @@ import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
 let shutdownComplete = false
+// The signed-in account for the current run; used by the account bridge.
+let currentAccount: AccountSession | undefined
 // While the sign-in window is open there is no main window yet; the app must
 // not quit merely because all (gate) windows closed on a successful sign-in.
 let signInActive = false
@@ -34,7 +36,10 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.focus()
   })
 
-  app.whenReady().then(startMareo).catch(showFatalError)
+  app.whenReady().then(async () => {
+    registerAccountBridge()
+    await startMareo()
+  }).catch(showFatalError)
 
   app.on('window-all-closed', () => {
     if (!signInActive) app.quit()
@@ -72,6 +77,7 @@ async function startMareo(): Promise<void> {
     app.quit()
     return
   }
+  currentAccount = account
 
   mainWindow = new BrowserWindow({
     title: 'Mareo',
@@ -81,6 +87,7 @@ async function startMareo(): Promise<void> {
     minHeight: 640,
     show: false,
     webPreferences: {
+      preload: path.join(app.getAppPath(), 'assets', 'account-bridge-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -253,6 +260,77 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
 
     void signInWindow.loadFile(path.join(app.getAppPath(), 'assets', 'signin.html'))
   })
+}
+
+function registerAccountBridge(): void {
+  ipcMain.handle('mareo:account:get', async () => {
+    if (!currentAccount) return { ok: false, error: 'signed-out' }
+    try {
+      const response = await fetch(`${GATEWAY_URL}/me`, {
+        headers: { authorization: `Bearer ${currentAccount.token}` },
+        signal: AbortSignal.timeout(8_000),
+      })
+      if (response.status === 200) {
+        const body = (await response.json()) as { displayName?: string; email?: string | null }
+        return { ok: true, displayName: body.displayName ?? '', email: body.email ?? null }
+      }
+      return { ok: false, error: 'unauthorized' }
+    } catch {
+      return { ok: false, error: 'unreachable' }
+    }
+  })
+
+  ipcMain.handle('mareo:account:update-name', async (_event, rawName: unknown) => {
+    const displayName = typeof rawName === 'string' ? rawName.trim() : ''
+    if (!currentAccount || displayName.length === 0 || displayName.length > 32) {
+      return { ok: false, error: 'invalid-name' }
+    }
+    try {
+      const response = await fetch(`${GATEWAY_URL}/account/name`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${currentAccount.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ displayName }),
+        signal: AbortSignal.timeout(8_000),
+      })
+      if (response.status === 200) return { ok: true, displayName }
+      return { ok: false, error: 'failed' }
+    } catch {
+      return { ok: false, error: 'unreachable' }
+    }
+  })
+
+  ipcMain.handle('mareo:account:sign-out', async () => {
+    if (currentAccount) {
+      try {
+        await fetch(`${GATEWAY_URL}/account/sign-out`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${currentAccount.token}` },
+          signal: AbortSignal.timeout(8_000),
+        })
+      } catch {
+        // Even if the network call fails, sign out locally.
+      }
+    }
+    setTimeout(() => {
+      void returnToSignIn()
+    }, 0)
+    return { ok: true }
+  })
+}
+
+/** Tears down the running session and shows the sign-in window again. */
+async function returnToSignIn(): Promise<void> {
+  signInActive = true
+  if (dshRuntime) {
+    const runtime = dshRuntime
+    dshRuntime = undefined
+    await runtime.stop()
+  }
+  currentAccount = undefined
+  clearAccount()
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy()
+  mainWindow = undefined
+  await startMareo()
 }
 
 function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {

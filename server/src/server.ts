@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { generateTokenSecret, hashToken } from './auth.js'
-import { renameAccount, revokeToken, findOrCreateAccountForIdentity, findTokenOwner, storeToken, type GatewayDatabase, type TokenOwner } from './db.js'
+import { findAccountEmail, renameAccount, revokeToken, findOrCreateAccountForIdentity, findTokenOwner, storeToken, type GatewayDatabase, type TokenOwner } from './db.js'
 import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from './email-auth.js'
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
@@ -46,7 +46,11 @@ async function handleRequest(
       sendJson(response, 401, { error: 'invalid token' })
       return
     }
-    sendJson(response, 200, { displayName: owner.displayName, accountId: owner.userId })
+    sendJson(response, 200, {
+      displayName: owner.displayName,
+      accountId: owner.userId,
+      email: findAccountEmail(options.db, owner.userId) ?? null,
+    })
     return
   }
 

@@ -261,6 +261,14 @@ export function renameAccount(db: GatewayDatabase, accountId: string, displayNam
   db.prepare('UPDATE users SET displayName = ? WHERE id = ?').run(displayName, accountId)
 }
 
+/** Primary email of an account, if one is bound (provider 'email'). */
+export function findAccountEmail(db: GatewayDatabase, accountId: string): string | undefined {
+  const row = db
+    .prepare("SELECT subject AS subject FROM identities WHERE accountId = ? AND provider = 'email' LIMIT 1")
+    .get(accountId) as { subject: string | null } | undefined
+  return typeof row?.subject === 'string' ? row.subject : undefined
+}
+
 /** Revokes one bearer token (e.g. "sign out on this device"). */
 export function revokeToken(db: GatewayDatabase, tokenHash: string): boolean {
   const result = db
