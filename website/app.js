@@ -1,14 +1,18 @@
-// Set a relative DMG path or an HTTPS download URL when the release is ready.
-const downloadUrl = 'downloads/Mareo-0.1.0-arm64.dmg';
+// Set a relative path or HTTPS URL per platform once the installer exists;
+// an empty value keeps that platform's "coming soon" note visible.
+const downloads = {
+  macos: 'downloads/Mareo-0.1.0-arm64.dmg',
+  windows: '',
+};
 
 const pageText = {
   'zh-CN': {
     title: 'Mareo — 让 AI 走进你的工作区',
-    description: 'Mareo，让 AI 走进你的工作区。基于 DeepSeek Harness 构建的桌面 AI Agent，适用于 macOS Apple Silicon。',
+    description: 'Mareo，让 AI 走进你的工作区。基于 DeepSeek Harness 构建的桌面 AI Agent，适用于 macOS 与 Windows。',
   },
   en: {
     title: 'Mareo — AI for your workspace',
-    description: 'Bring AI into your workspace with Mareo, an independent desktop AI agent built on DeepSeek Harness for macOS Apple Silicon.',
+    description: 'Bring AI into your workspace with Mareo, an independent desktop AI agent built on DeepSeek Harness for macOS and Windows.',
   },
 };
 const languageButtons = document.querySelectorAll('[data-language]');
@@ -36,9 +40,12 @@ for (const button of languageButtons) {
   });
 }
 
-if (downloadUrl) {
-  const link = document.getElementById('download-link');
-  link.href = downloadUrl;
+for (const [platform, url] of Object.entries(downloads)) {
+  if (!url) continue;
+  const link = document.getElementById(`download-link${platform === 'macos' ? '' : '-' + platform}`);
+  const pending = document.getElementById(`download-pending${platform === 'macos' ? '' : '-' + platform}`);
+  if (!link) continue;
+  link.href = url;
   link.hidden = false;
-  document.getElementById('download-pending').hidden = true;
+  if (pending) pending.hidden = true;
 }

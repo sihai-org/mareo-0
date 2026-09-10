@@ -115,7 +115,7 @@ async function startMareo(): Promise<void> {
       const dshHome = account.accountId ? await resolveDshHome(account.accountId) : legacyDshHome()
       dshRuntime = await startDshRuntime({
         runtimeDirectory: path.join(runtimeDirectory, 'dsh-runtime'),
-        nodeExecutable: path.join(runtimeDirectory, 'node-runtime', 'bin', 'node'),
+        nodeExecutable: path.join(runtimeDirectory, 'node-runtime', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
         dshHome,
         workingDirectory: app.getPath('home'),
         logFile: path.join(app.getPath('userData'), 'logs', 'mareo.log'),

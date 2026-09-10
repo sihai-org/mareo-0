@@ -7,45 +7,89 @@ import { spawn } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
+// Stages the packaged runtime for one target platform:
+//   node scripts/stage-runtime.mjs [--platform <darwin|win32>] [--arch <arm64|x64>]
+//   node scripts/stage-runtime.mjs --platform win32 --arch x64 --check-node-runtime
+// The last form only downloads and validates the target's Node archive, which
+// is how the Windows archive is verified from a non-Windows machine.
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const manifestDirectory = path.join(projectDirectory, 'runtime')
 const stagingRoot = path.join(projectDirectory, '.staging')
 const dshStagingDirectory = path.join(stagingRoot, 'dsh-runtime')
 const nodeStagingDirectory = path.join(stagingRoot, 'node-runtime')
 const manifest = JSON.parse(await readFile(path.join(manifestDirectory, 'package.json'), 'utf8'))
-const nodeRuntime = manifest.mareo?.node
 
-if (!nodeRuntime || nodeRuntime.platform !== process.platform || nodeRuntime.arch !== process.arch) {
-  throw new Error(`The V0 runtime supports ${nodeRuntime?.platform}/${nodeRuntime?.arch}, not ${process.platform}/${process.arch}.`)
+const options = parseArguments(process.argv.slice(2))
+const targetPlatform = options.platform
+const targetArch = options.arch
+const nodeRuntimes = manifest.mareo?.node ?? {}
+const nodeRuntime = nodeRuntimes[`${targetPlatform}-${targetArch}`]
+
+if (!nodeRuntime) {
+  throw new Error(`No pinned Node runtime for ${targetPlatform}/${targetArch}. Add it to runtime/package.json.`)
+}
+if (!options.checkNodeRuntime && (targetPlatform !== process.platform || targetArch !== process.arch)) {
+  throw new Error(
+    `The DSH dependency tree is installed for the host platform, so staging must run on ${targetPlatform}/${targetArch}. ` +
+      'Use --check-node-runtime to validate the Node archive from another machine.',
+  )
 }
 
-await rm(stagingRoot, { recursive: true, force: true })
-await mkdir(dshStagingDirectory, { recursive: true })
-await Promise.all([
-  cp(path.join(manifestDirectory, 'package.json'), path.join(dshStagingDirectory, 'package.json')),
-  cp(path.join(manifestDirectory, 'package-lock.json'), path.join(dshStagingDirectory, 'package-lock.json')),
-])
+if (options.checkNodeRuntime) {
+  const checkDirectory = path.join(projectDirectory, '.cache', 'node-check')
+  await rm(checkDirectory, { recursive: true, force: true })
+  await stageNodeRuntime(nodeRuntime, checkDirectory)
+  console.log(`Verified ${targetPlatform}/${targetArch} Node ${nodeRuntime.version} archive and layout.`)
+  await rm(checkDirectory, { recursive: true, force: true })
+} else {
+  await rm(stagingRoot, { recursive: true, force: true })
+  await mkdir(dshStagingDirectory, { recursive: true })
+  await Promise.all([
+    cp(path.join(manifestDirectory, 'package.json'), path.join(dshStagingDirectory, 'package.json')),
+    cp(path.join(manifestDirectory, 'package-lock.json'), path.join(dshStagingDirectory, 'package-lock.json')),
+  ])
 
-await run('npm', ['ci', '--omit=dev'], dshStagingDirectory)
-// Ship our own package alongside npm dependencies; leave all DSH packages intact.
-const brandDirectory = path.join(dshStagingDirectory, 'node_modules', 'mareo-brand')
-await mkdir(brandDirectory, { recursive: true })
-for (const file of ['package.json', 'index.js']) {
-  await cp(path.join(projectDirectory, 'brand', file), path.join(brandDirectory, file))
+  await run('npm', ['ci', '--omit=dev'], dshStagingDirectory)
+  // Ship our own package alongside npm dependencies; leave all DSH packages intact.
+  const brandDirectory = path.join(dshStagingDirectory, 'node_modules', 'mareo-brand')
+  await mkdir(brandDirectory, { recursive: true })
+  for (const file of ['package.json', 'index.js']) {
+    await cp(path.join(projectDirectory, 'brand', file), path.join(brandDirectory, file))
+  }
+  const logoUrl = `data:image/png;base64,${(await readFile(path.join(projectDirectory, 'assets', 'logo.png'))).toString('base64')}`
+  const brandClient = await readFile(path.join(projectDirectory, 'brand', 'client.cjs'), 'utf8')
+  await writeFile(path.join(brandDirectory, 'client.js'),
+    `window.__ModuleLoader__.load({ id: 'mareo-brand', factory: (require) => {\nconst exports = {};\nconst logoUrl = ${JSON.stringify(logoUrl)};\n${brandClient}\nreturn exports;\n} });\n`)
+  await stageNodeRuntime(nodeRuntime, nodeStagingDirectory)
+  await run(process.execPath, [path.join(projectDirectory, 'scripts', 'verify-runtime.mjs'), stagingRoot], projectDirectory)
 }
-const logoUrl = `data:image/png;base64,${(await readFile(path.join(projectDirectory, 'assets', 'logo.png'))).toString('base64')}`
-const brandClient = await readFile(path.join(projectDirectory, 'brand', 'client.cjs'), 'utf8')
-await writeFile(path.join(brandDirectory, 'client.js'),
-  `window.__ModuleLoader__.load({ id: 'mareo-brand', factory: (require) => {\nconst exports = {};\nconst logoUrl = ${JSON.stringify(logoUrl)};\n${brandClient}\nreturn exports;\n} });\n`)
-await stageNodeRuntime(nodeRuntime)
-await run(process.execPath, [path.join(projectDirectory, 'scripts', 'verify-runtime.mjs'), stagingRoot], projectDirectory)
 
-async function stageNodeRuntime(nodeConfig) {
-  const archiveName = `node-v${nodeConfig.version}-${nodeConfig.platform}-${nodeConfig.arch}.tar.gz`
+function parseArguments(argv) {
+  const value = (flag) => {
+    const index = argv.indexOf(flag)
+    return index >= 0 ? argv[index + 1] : undefined
+  }
+  return {
+    platform: value('--platform') ?? process.platform,
+    arch: value('--arch') ?? process.arch,
+    checkNodeRuntime: argv.includes('--check-node-runtime'),
+  }
+}
+
+function nodeArchiveName(nodeConfig) {
+  // Official archives spell Windows as "win" (node-vX-win-x64.zip), while
+  // process.platform calls it "win32".
+  const archivePlatform = nodeConfig.platform === 'win32' ? 'win' : nodeConfig.platform
+  const extension = nodeConfig.platform === 'win32' ? 'zip' : 'tar.gz'
+  return `node-v${nodeConfig.version}-${archivePlatform}-${nodeConfig.arch}.${extension}`
+}
+
+async function stageNodeRuntime(nodeConfig, destinationDirectory) {
+  const archiveName = nodeArchiveName(nodeConfig)
   const cacheDirectory = path.join(projectDirectory, '.cache', 'node')
   const archivePath = path.join(cacheDirectory, archiveName)
-  const extractionDirectory = path.join(stagingRoot, 'node-extraction')
-  const distributionDirectory = path.join(extractionDirectory, archiveName.replace(/\.tar\.gz$/, ''))
+  const extractionDirectory = path.join(destinationDirectory, 'extraction')
+  const distributionDirectory = path.join(extractionDirectory, archiveName.replace(/\.(tar\.gz|zip)$/, ''))
 
   await mkdir(cacheDirectory, { recursive: true })
   try {
@@ -55,12 +99,18 @@ async function stageNodeRuntime(nodeConfig) {
     await verifyChecksum(archivePath, nodeConfig.sha256)
   }
 
+  // `tar -xf` handles both .tar.gz and .zip on macOS and Windows 10+ (bsdtar).
   await mkdir(extractionDirectory, { recursive: true })
-  await run('tar', ['-xzf', archivePath, '-C', extractionDirectory], projectDirectory)
-  await mkdir(path.join(nodeStagingDirectory, 'bin'), { recursive: true })
+  await run('tar', ['-xf', archivePath, '-C', extractionDirectory], projectDirectory)
+
+  const executableSource = nodeConfig.platform === 'win32'
+    ? path.join(distributionDirectory, 'node.exe')
+    : path.join(distributionDirectory, 'bin', 'node')
+  const executableName = nodeConfig.platform === 'win32' ? 'node.exe' : 'node'
+  await mkdir(path.join(destinationDirectory, 'bin'), { recursive: true })
   await Promise.all([
-    cp(path.join(distributionDirectory, 'bin', 'node'), path.join(nodeStagingDirectory, 'bin', 'node')),
-    cp(path.join(distributionDirectory, 'LICENSE'), path.join(nodeStagingDirectory, 'LICENSE')),
+    cp(executableSource, path.join(destinationDirectory, 'bin', executableName)),
+    cp(path.join(distributionDirectory, 'LICENSE'), path.join(destinationDirectory, 'LICENSE')),
   ])
   await rm(extractionDirectory, { recursive: true, force: true })
 }
@@ -91,7 +141,7 @@ async function downloadToFile(url, destination) {
         reject(new Error(`Failed to download ${url}: HTTP ${response.statusCode}`))
         return
       }
-      pipeline(response, createWriteStream(partial)).then(resolve, reject)
+      pipeline(response, createWriteStream(destination)).then(resolve, reject)
     })
     request.once('error', reject)
   })

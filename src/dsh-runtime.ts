@@ -1,9 +1,12 @@
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { get } from 'node:http'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 const STARTUP_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 5_000
@@ -78,7 +81,9 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
     ],
     {
       cwd: options.workingDirectory,
-      detached: true,
+      // POSIX uses a process group so the whole DSH tree can be signalled at
+      // once; Windows has no process groups, so it is killed via taskkill.
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         DSH_HOME: options.dshHome,
@@ -131,20 +136,20 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
       async stop() {
         if (stopping || exitDescription !== undefined) return
         stopping = true
-        signalProcessGroup(child.pid, 'SIGTERM')
+        await terminateDshTree(child.pid, 'SIGTERM')
         await Promise.race([
           exited,
           new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
         ])
         if (exitDescription === undefined) {
-          signalProcessGroup(child.pid, 'SIGKILL')
+          await terminateDshTree(child.pid, 'SIGKILL')
           await exited
         }
       },
     }
   } catch (error) {
     stopping = true
-    if (exitDescription === undefined) signalProcessGroup(child.pid, 'SIGTERM')
+    if (exitDescription === undefined) await terminateDshTree(child.pid, 'SIGTERM')
     await Promise.race([
       exited,
       new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
@@ -212,8 +217,21 @@ function redactDshToken(output: string): string {
   return output.replace(/([?&]token=)[^\s&]+/g, '$1[REDACTED]')
 }
 
-function signalProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
+/** Stops the DSH process and its children on the current platform. */
+async function terminateDshTree(pid: number | undefined, signal: NodeJS.Signals): Promise<void> {
   if (pid === undefined) return
+  if (process.platform === 'win32') {
+    // taskkill /T terminates the whole tree; /F is required for the force case
+    // since Windows has no SIGKILL.
+    const args = ['/pid', String(pid), '/T']
+    if (signal === 'SIGKILL') args.push('/F')
+    try {
+      await execFileAsync('taskkill', args)
+    } catch {
+      // The process may already be gone.
+    }
+    return
+  }
   try {
     process.kill(-pid, signal)
   } catch (error) {

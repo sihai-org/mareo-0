@@ -296,9 +296,15 @@ h3 {
   margin-top:22px;
   line-height:1.8
 }
-.release {
+.releases {
+  display:grid;
+  gap:28px;
   padding-left:48px;
   border-left:1px solid #d5d9ed
+}
+.release+.release {
+  border-top:1px solid #d5d9ed;
+  padding-top:28px
 }
 .release img {
   width:88px;
@@ -418,7 +424,7 @@ h3 {
     padding:40px;
     gap:28px
   }
-  .release {
+  .releases {
     padding-left:28px
   }
   .details {
@@ -500,6 +506,10 @@ h3 {
     gap:32px;
     padding:32px 25px;
     border-radius:18px
+  }
+  .releases {
+    padding-left:0;
+    border-left:0
   }
   .download h2 {
     font-size:36px

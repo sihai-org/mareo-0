@@ -6,30 +6,32 @@ import vm from 'node:vm';
 const script = readFileSync(new URL('app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('index.html', import.meta.url), 'utf8');
 
-function configuredDownloadUrl(source) {
-  const match = source.match(/const downloadUrl = ['"]([^'"]*)['"];/);
-  return match ? match[1] : '';
+function configuredDownloads(source) {
+  const match = source.match(/const downloads = (\{[\s\S]*?\});/);
+  if (!match) return {};
+  return Function(`return (${match[1]});`)();
 }
 
-function openPage({ saved, storageBlocked = false, download } = {}) {
-  // download === undefined keeps the repository's configured default;
-  // any other value overrides it for this page instance.
+function openPage({ saved, storageBlocked = false, downloads } = {}) {
+  // downloads === undefined keeps the repository's configured values; any
+  // object overrides them for this page instance.
   const body =
-    download === undefined
+    downloads === undefined
       ? script
-      : script.replace(/const downloadUrl = [^;]+;/, `const downloadUrl = ${JSON.stringify(download)};`);
+      : script.replace(/const downloads = \{[\s\S]*?\};/, `const downloads = ${JSON.stringify(downloads)};`);
   const buttons = ['zh-CN', 'en'].map(language => ({
     dataset: { language }, attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
     addEventListener(_event, callback) { this.click = callback; },
   }));
   const meta = {}, languageGroup = { hidden: true };
-  const downloadLink = { hidden: true }, pending = { hidden: false };
+  const links = { 'download-link': { hidden: true }, 'download-link-windows': { hidden: true } };
+  const pendings = { 'download-pending': { hidden: false }, 'download-pending-windows': { hidden: false } };
   const document = {
     documentElement: { lang: 'zh-CN' },
     querySelectorAll: () => buttons,
-    querySelector: selector => selector === '.languages' ? languageGroup : meta,
-    getElementById: id => id === 'download-link' ? downloadLink : pending,
+    querySelector: selector => (selector === '.languages' ? languageGroup : meta),
+    getElementById: id => links[id] ?? pendings[id] ?? null,
   };
   const storage = new Map(saved ? [['mareo-site-language', saved]] : []);
   vm.runInNewContext(body, {
@@ -39,7 +41,7 @@ function openPage({ saved, storageBlocked = false, download } = {}) {
       setItem(key, value) { if (storageBlocked) throw Error('blocked'); storage.set(key, value); },
     },
   });
-  return { document, buttons, meta, storage, languageGroup, downloadLink, pending };
+  return { document, buttons, meta, storage, languageGroup, links, pendings };
 }
 
 test('Chinese default, accessible language toggle and remembered English', () => {
@@ -65,28 +67,35 @@ test('Invalid preferences and unavailable storage do not break the page', () => 
   assert.equal(page.document.documentElement.lang, 'en');
 });
 
-test('Download reflects the configured release URL and can be toggled off', () => {
-  const defaultUrl = configuredDownloadUrl(script);
+test('Each platform exposes its download only when a URL is configured', () => {
+  const configured = configuredDownloads(script);
+  const page = openPage();
 
-  if (defaultUrl) {
-    const page = openPage();
-    assert.equal(page.downloadLink.href, defaultUrl);
-    assert.equal(page.downloadLink.hidden, false);
-    assert.equal(page.pending.hidden, true);
-  } else {
-    const page = openPage();
-    assert.equal(page.downloadLink.hidden, true);
-    assert.equal(page.pending.hidden, false);
+  for (const platform of ['macos', 'windows']) {
+    const suffix = platform === 'macos' ? '' : `-${platform}`;
+    const link = page.links[`download-link${suffix}`];
+    const pending = page.pendings[`download-pending${suffix}`];
+    if (configured[platform]) {
+      assert.equal(link.href, configured[platform]);
+      assert.equal(link.hidden, false);
+      assert.equal(pending.hidden, true);
+    } else {
+      assert.equal(link.hidden, true);
+      assert.equal(pending.hidden, false);
+    }
   }
 
-  const overridden = openPage({ download: 'downloads/Mareo-arm64.dmg' });
-  assert.equal(overridden.downloadLink.href, 'downloads/Mareo-arm64.dmg');
-  assert.equal(overridden.downloadLink.hidden, false);
-  assert.equal(overridden.pending.hidden, true);
+  const bothOff = openPage({ downloads: { macos: '', windows: '' } });
+  assert.equal(bothOff.links['download-link'].hidden, true);
+  assert.equal(bothOff.pendings['download-pending'].hidden, false);
+  assert.equal(bothOff.links['download-link-windows'].hidden, true);
+  assert.equal(bothOff.pendings['download-pending-windows'].hidden, false);
 
-  const disabled = openPage({ download: '' });
-  assert.equal(disabled.downloadLink.hidden, true);
-  assert.equal(disabled.pending.hidden, false);
+  const bothOn = openPage({ downloads: { macos: 'downloads/Mareo.dmg', windows: 'downloads/MareoSetup.exe' } });
+  assert.equal(bothOn.links['download-link'].href, 'downloads/Mareo.dmg');
+  assert.equal(bothOn.links['download-link-windows'].href, 'downloads/MareoSetup.exe');
+  assert.equal(bothOn.pendings['download-pending'].hidden, true);
+  assert.equal(bothOn.pendings['download-pending-windows'].hidden, true);
 });
 
 test('Static assets and fragment links resolve within the standalone directory', () => {
@@ -99,5 +108,4 @@ test('Static assets and fragment links resolve within the standalone directory',
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
   assert.match(html, /<html lang="zh-CN">/);
-  assert.match(html, /id="download-link"[^>]*hidden/);
 });

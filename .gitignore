@@ -154,3 +154,6 @@ server/deploy/backups/
 
 # Release credentials (one-click publish)
 .release.env
+
+# Local npm cache used when the default cache is unwritable
+.npm-cache/

@@ -4,10 +4,18 @@
   "private": true,
   "mareo": {
     "node": {
-      "version": "24.20.0",
-      "platform": "darwin",
-      "arch": "arm64",
-      "sha256": "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8"
+      "darwin-arm64": {
+        "version": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "sha256": "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8"
+      },
+      "win32-x64": {
+        "version": "24.20.0",
+        "platform": "win32",
+        "arch": "x64",
+        "sha256": "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba"
+      }
     }
   },
   "dependencies": {
