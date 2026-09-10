@@ -24,7 +24,13 @@ let signInActive = false
 
 app.setName('Mareo')
 // Keep existing installations' data independent of the display name.
-app.setPath('userData', path.join(app.getPath('appData'), 'Mareo'))
+// MAREO_USER_DATA lets a source run use a throwaway data directory, so local
+// testing never touches the installed app's sessions or account.
+const userDataOverride = process.env.MAREO_USER_DATA
+app.setPath(
+  'userData',
+  userDataOverride && !app.isPackaged ? userDataOverride : path.join(app.getPath('appData'), 'Mareo'),
+)
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
