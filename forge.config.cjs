@@ -26,6 +26,9 @@ if (targetPlatform === "win32") {
       name: "Mareo",
       setupExe: "MareoSetup.exe",
       setupIcon: path.join(__dirname, "assets", "app-icon.ico"),
+      loadingGif: path.join(__dirname, "assets", "installer-loading.gif"),
+      // Shown in the Windows Apps & features list; must stay reachable.
+      iconUrl: "https://mareo.cn/downloads/app-icon.ico",
       authors: "Wuhan Datou AI Technology Co., Ltd.",
       description: "Mareo desktop host for DeepSeek Harness",
       // Signing the installer needs the code-signing certificate; without it

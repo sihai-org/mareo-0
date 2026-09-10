@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { spawn } from 'node:child_process'
 import path from 'node:path'
 import {
   checkToken,
@@ -12,6 +13,7 @@ import {
 } from './account.js'
 import { accountHomePath, migrateLegacyHomeOnce } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
+import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
@@ -32,7 +34,12 @@ app.setPath(
   userDataOverride && !app.isPackaged ? userDataOverride : path.join(app.getPath('appData'), 'Mareo'),
 )
 
-if (!app.requestSingleInstanceLock()) {
+const squirrelAction = squirrelActionFor(process.argv)
+if (squirrelAction !== undefined) {
+  // Squirrel install/update/uninstall invocation: handle shortcuts and exit
+  // without starting the app (otherwise the login window pops up mid-install).
+  runSquirrelAction(squirrelAction)
+} else if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
@@ -60,6 +67,25 @@ if (!app.requestSingleInstanceLock()) {
       app.quit()
     })
   })
+}
+
+/** Runs the Squirrel lifecycle command by delegating to Update.exe. */
+function runSquirrelAction(action: SquirrelAction): void {
+  if (action === 'quit') {
+    app.quit()
+    return
+  }
+  const updateExe = path.join(path.resolve(path.dirname(process.execPath), '..'), 'Update.exe')
+  const executableName = path.basename(process.execPath)
+  const args = action === 'create-shortcuts'
+    ? ['--createShortcut', executableName]
+    : ['--removeShortcut', executableName]
+  const child = spawn(updateExe, args, { detached: true, stdio: 'ignore' })
+  child.once('error', () => {
+    // Nothing to recover here: Squirrel retries on the next install/update.
+  })
+  child.unref()
+  setTimeout(() => app.quit(), 1_000)
 }
 
 function legacyDshHome(): string {

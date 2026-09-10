@@ -86,6 +86,14 @@ out\Mareo-win32-x64\Mareo.exe                  ← 免安装可执行（调试�
 5. 退出后换另一个账号登录 → 会话/设置是独立环境
 6. 控制面板卸载干净；再次安装覆盖升级正常
 
+## 安装器行为（Squirrel）
+
+- **快捷方式由应用自己创建**：Squirrel 安装/升级时会用 `--squirrel-install` / `--squirrel-updated` 启动应用，`src/squirrel.ts` + `src/main.ts` 收到后用 `Update.exe --createShortcut` 创建开始菜单与桌面快捷方式，然后立即退出。**若缺少这段处理，安装期间会误弹登录窗，且不会生成任何快捷方式**（旧版本正是如此）。
+- 卸载时 Squirrel 传 `--squirrel-uninstall`，应用调用 `--removeShortcut` 清理。
+- 安装期间的 loading 动画来自 `assets/installer-loading.gif`（由 `scripts/generate-installer-gif.py` 生成，需要 Pillow）。
+- “应用和功能”里的图标来自 `iconUrl`（`https://mareo.cn/downloads/app-icon.ico`）——**发布新版本前确认该文件已上传且可访问**。
+- 快捷方式缺失时的补救：`& "$env:LOCALAPPDATA\Mareo\Update.exe" --createShortcut Mareo.exe`
+
 ## 六、上传与发布
 
 ```powershell
