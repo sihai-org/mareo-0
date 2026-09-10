@@ -3,9 +3,25 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 
 const resourcesDirectory = path.resolve(process.argv[2] ?? '.staging')
+const targetPlatform = argument('--platform') ?? process.platform
+const targetArch = argument('--arch') ?? process.arch
 const dshRuntimeRoot = await realpath(path.join(resourcesDirectory, 'dsh-runtime'))
-const nodeExecutable = path.join(resourcesDirectory, 'node-runtime', 'bin', 'node')
+const nodeExecutable = path.join(
+  resourcesDirectory,
+  'node-runtime',
+  'bin',
+  targetPlatform === 'win32' ? 'node.exe' : 'node',
+)
 const manifest = JSON.parse(await readFile(path.join(dshRuntimeRoot, 'package.json'), 'utf8'))
+const nodeRuntime = manifest.mareo.node[`${targetPlatform}-${targetArch}`]
+if (!nodeRuntime) {
+  throw new Error(`No pinned Node runtime for ${targetPlatform}/${targetArch} in the runtime manifest.`)
+}
+
+function argument(flag) {
+  const index = process.argv.indexOf(flag)
+  return index >= 0 ? process.argv[index + 1] : undefined
+}
 const dshDirectory = path.join(dshRuntimeRoot, 'node_modules', '@deepseek-ai', 'dsh')
 const dshPackage = JSON.parse(await readFile(path.join(dshDirectory, 'package.json'), 'utf8'))
 const expectedVersion = manifest.dependencies?.['@deepseek-ai/dsh']
@@ -19,9 +35,9 @@ if (!dshPackage.bin?.dsh) {
 
 let symlinkCount = 0
 await inspectLinks(dshRuntimeRoot)
-await run(nodeExecutable, ['--version'], `v${manifest.mareo.node.version}`, resourcesDirectory)
+await run(nodeExecutable, ['--version'], `v${nodeRuntime.version}`, resourcesDirectory)
 await run(nodeExecutable, ['--expose-internals', path.join(dshDirectory, dshPackage.bin.dsh), '--version'], dshPackage.version, dshRuntimeRoot)
-console.log(`Verified Node ${manifest.mareo.node.version} and DSH ${dshPackage.version} (${symlinkCount} contained symlinks).`)
+console.log(`Verified Node ${nodeRuntime.version} and DSH ${dshPackage.version} (${symlinkCount} contained symlinks).`)
 
 async function inspectLinks(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {

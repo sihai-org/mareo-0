@@ -49,7 +49,7 @@ if (options.checkNodeRuntime) {
     cp(path.join(manifestDirectory, 'package-lock.json'), path.join(dshStagingDirectory, 'package-lock.json')),
   ])
 
-  await run('npm', ['ci', '--omit=dev'], dshStagingDirectory)
+  await runNpm(['ci', '--omit=dev'], dshStagingDirectory)
   // Ship our own package alongside npm dependencies; leave all DSH packages intact.
   const brandDirectory = path.join(dshStagingDirectory, 'node_modules', 'mareo-brand')
   await mkdir(brandDirectory, { recursive: true })
@@ -61,7 +61,7 @@ if (options.checkNodeRuntime) {
   await writeFile(path.join(brandDirectory, 'client.js'),
     `window.__ModuleLoader__.load({ id: 'mareo-brand', factory: (require) => {\nconst exports = {};\nconst logoUrl = ${JSON.stringify(logoUrl)};\n${brandClient}\nreturn exports;\n} });\n`)
   await stageNodeRuntime(nodeRuntime, nodeStagingDirectory)
-  await run(process.execPath, [path.join(projectDirectory, 'scripts', 'verify-runtime.mjs'), stagingRoot], projectDirectory)
+  await run(process.execPath, [path.join(projectDirectory, 'scripts', 'verify-runtime.mjs'), stagingRoot, '--platform', targetPlatform, '--arch', targetArch], projectDirectory)
 }
 
 function parseArguments(argv) {
@@ -145,6 +145,17 @@ async function downloadToFile(url, destination) {
     })
     request.once('error', reject)
   })
+}
+
+// `npm` is a shell script on POSIX but npm.cmd on Windows, which Node cannot
+// spawn directly. Running npm's own JS entry through the current Node avoids
+// the platform difference entirely; when this script is not started by npm we
+// fall back to the platform launcher.
+function runNpm(args, cwd) {
+  const npmCli = process.env.npm_execpath
+  if (npmCli) return run(process.execPath, [npmCli, ...args], cwd)
+  if (process.platform === 'win32') return run('cmd.exe', ['/d', '/s', '/c', 'npm', ...args], cwd)
+  return run('npm', args, cwd)
 }
 
 function run(command, args, cwd) {
