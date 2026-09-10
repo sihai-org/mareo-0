@@ -103,7 +103,7 @@ test('Static assets and fragment links resolve within the standalone directory',
     if (reference === '#') continue;
     if (reference.startsWith('#')) assert(html.includes(`id="${reference.slice(1)}"`), reference);
     else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference)) continue; // absolute schemes: https, mailto, …
-    else assert(existsSync(new URL(reference, import.meta.url)), reference);
+    else assert(existsSync(new URL(reference.split('?')[0].split('#')[0], import.meta.url)), reference);
   }
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
