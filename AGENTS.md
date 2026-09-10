@@ -138,7 +138,6 @@ This phase primarily accomplishes:
 - Commit all completed work to the task branch.
 - Automatically commit the code when each work done.
 - Run relevant tests before finishing.
-- Push the branch and create a Pull Request when possible.
 - **Never merge the PR or merge the branch into `main`.**
 - **Never push directly to `main`.**
 - The human user is always responsible for reviewing and merging the PR.
