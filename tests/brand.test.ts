@@ -6,7 +6,7 @@ import vm from 'node:vm'
 
 interface Element {
   tag: string
-  props: { alt?: string; width?: number; src?: string; style?: { height?: number; pointerEvents?: string } }
+  props: { alt?: string; width?: number; src?: string; style?: { height?: number; pointerEvents?: string; letterSpacing?: string; textAlign?: string } }
   children: (Element | string)[]
 }
 
@@ -51,11 +51,13 @@ test('brand plugin occupies only official brand and overlay slots', () => {
   }
   const name = registrations.get('sidebar.brand.name')!.render()
   assert.equal(name.props.style?.height, 24)
-  assert.equal((name.children[0] as Element).children[0], "Mareo");
-  assert.equal((name.children[1] as Element).children[0], 'Built on DeepSeek Harness')
+  assert.deepEqual(name.children, ['Mareo'])
+  assert.equal(name.props.style?.letterSpacing, 'normal')
+  assert.equal(name.props.style?.textAlign, 'left')
   const attribution = registrations.get('shell.overlay')!
   assert.equal(attribution.options.id, 'mareo-attribution')
   assert.equal(attribution.render().props.style?.pointerEvents, 'none')
+  assert.deepEqual(attribution.render().children, ['Built on DeepSeek Harness'])
 })
 
 test('registers the Account settings page when the Mareo bridge is present', () => {

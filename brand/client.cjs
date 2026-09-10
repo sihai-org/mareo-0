@@ -11,34 +11,21 @@ function BrandMark({ size }) {
 }
 
 function BrandName() {
-  // The official sidebar reserves 24px for this slot; both lines fit inside it.
   return React.createElement(
-    "div",
-    { style: { display: "grid", height: 24 } },
-    React.createElement(
-      "span",
-      {
-        style: {
-          fontSize: 14,
-          fontWeight: 600,
-          lineHeight: "14px",
-          whiteSpace: "nowrap",
-        },
+    "span",
+    {
+      style: {
+        display: "block",
+        height: 24,
+        fontSize: 16,
+        fontWeight: 600,
+        lineHeight: "24px",
+        letterSpacing: "normal",
+        textAlign: "left",
+        whiteSpace: "nowrap",
       },
-      "Mareo",
-    ),
-    React.createElement(
-      "span",
-      {
-        style: {
-          fontSize: 9,
-          lineHeight: "10px",
-          color: "var(--dsw-alias-label-tertiary)",
-          whiteSpace: "nowrap",
-        },
-      },
-      "Built on DeepSeek Harness",
-    ),
+    },
+    "Mareo",
   );
 }
 
