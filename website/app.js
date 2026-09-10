@@ -2,7 +2,7 @@
 // an empty value keeps that platform's "coming soon" note visible.
 const downloads = {
   macos: 'downloads/Mareo-0.1.0-arm64.dmg',
-  windows: '',
+  windows: 'downloads/MareoSetup.exe',
 };
 
 const pageText = {
