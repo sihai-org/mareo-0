@@ -58,6 +58,7 @@ module.exports = {
     extraResource: [".staging/dsh-runtime", ".staging/node-runtime"],
     ignore: [
       /^\/\.cache(?:\/|$)/,
+      /^\/\.github(?:\/|$)/,
       /^\/\.npm-cache(?:\/|$)/,
       /^\/\.staging(?:\/|$)/,
       /^\/dist\/tests(?:\/|$)/,
@@ -66,6 +67,7 @@ module.exports = {
       /^\/server(?:\/|$)/,
       /^\/brand(?:\/|$)/,
       /^\/website(?:\/|$)/,
+      /^\/docs(?:\/|$)/,
       /^\/entitlements\.mac\.plist$/,
       /^\/tests(?:\/|$)/,
       /^\/src\/.*\.ts$/,

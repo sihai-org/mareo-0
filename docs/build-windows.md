@@ -1,6 +1,30 @@
 # Windows 构建与发布
 
-Windows 产物是 **Squirrel 安装包**（`MareoSetup.exe`）。Squirrel 不能在 macOS 上交叉构建，因此本流程**必须在 Windows x64 机器上执行**（公司机器或 CI 的 Windows runner）。
+Windows 产物是 **Squirrel 安装包**（`MareoSetup.exe`）。Squirrel 不能在 macOS 上交叉构建，因此必须在 Windows x64 上构建。两条路线：
+
+- **方式 A（推荐，零本地环境）**：GitHub Actions 的 Windows runner 构建，产物作为 Artifact 下载
+- **方式 B**：在一台 Windows 机器上按下面步骤本地构建
+
+## 方式 A：GitHub Actions（无需本地 Windows）
+
+1. 仓库 → **Actions** → 左侧 **Windows build** → **Run workflow** → 选择分支 → 运行
+2. 约 10 分钟后，在该次运行页面底部 **Artifacts** 下载 `MareoSetup-windows-x64`
+3. 解压得到 `MareoSetup.exe`，上传到服务器下载目录：
+   ```sh
+   scp MareoSetup.exe root@114.55.15.112:/var/www/mareo-site/downloads/
+   ```
+4. 更新官网 `website/app.js` 的 `downloads.windows` 为 `downloads/MareoSetup.exe`，rsync `index.html`/`app.js` 上线
+
+**启用签名**（可选，随时加）：仓库 → Settings → Secrets and variables → Actions，添加两个 secret：
+
+| Secret | 值 |
+|---|---|
+| `WINDOWS_CERT_BASE64` | `.pfx` 证书文件的 base64（`base64 -i mareo.pfx \| pbcopy`） |
+| `WINDOWS_CERT_PASSWORD` | `.pfx` 密码 |
+
+加完后 workflow 自动产出签名安装包，无需改代码。
+
+## 方式 B：本地 Windows 机器
 
 ## 前置
 
