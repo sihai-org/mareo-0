@@ -15,6 +15,7 @@ import {
 import { accountHomePath, migrateLegacyHomeOnce } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
+import { fetchLatestRelease, isNewerVersion, selectDownloadUrl } from './update-check.js'
 
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
@@ -132,6 +133,7 @@ async function startMareo(): Promise<void> {
   // Windows/Linux show Electron's default File/Edit/View menu bar; macOS keeps
   // its own system menu, so only the other platforms are cleared.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+  scheduleUpdateCheck()
   app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'app-icon.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
@@ -323,6 +325,36 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
 
     void signInWindow.loadFile(path.join(app.getAppPath(), 'assets', 'signin.html'))
   })
+}
+
+const UPDATE_MANIFEST_URL = process.env.MAREO_UPDATE_URL ?? 'https://mareo.cn/updates/latest.json'
+
+/** Checks the release manifest once per launch, without blocking startup. */
+function scheduleUpdateCheck(): void {
+  if (!app.isPackaged || process.env.MAREO_UPDATE_CHECK === 'off') return
+  setTimeout(() => {
+    void notifyIfUpdateAvailable()
+  }, 10_000)
+}
+
+async function notifyIfUpdateAvailable(): Promise<void> {
+  const manifest = await fetchLatestRelease(UPDATE_MANIFEST_URL)
+  if (manifest === undefined || !isNewerVersion(manifest.version, app.getVersion())) return
+  const downloadUrl = selectDownloadUrl(manifest)
+  if (downloadUrl === undefined) return
+
+  const options = {
+    type: 'info' as const,
+    title: 'Mareo 有新版本',
+    message: `Mareo ${manifest.version} 已发布（当前 ${app.getVersion()}）`,
+    detail: manifest.notes ?? '建议更新以获得最新改进。',
+    buttons: ['前往下载', '稍后'],
+    defaultId: 0,
+    cancelId: 1,
+  }
+  const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+  if (response === 0) void shell.openExternal(downloadUrl)
 }
 
 function registerAccountBridge(): void {
