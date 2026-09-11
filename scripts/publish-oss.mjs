@@ -36,10 +36,14 @@ export async function uploadFiles({ configuration, files, prefix = '' }) {
   }
 }
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const prefixIndex = argv.indexOf('--prefix')
   const prefix = prefixIndex >= 0 ? (argv[prefixIndex + 1] ?? '') : ''
-  const files = argv.filter((argument, index) => !argument.startsWith('--') && index !== prefixIndex + 1)
+  const files = argv.filter((argument, index) => {
+    if (argument.startsWith('--')) return false
+    // Only the value that follows --prefix is not a file.
+    return prefixIndex < 0 || index !== prefixIndex + 1
+  })
   return { prefix, files }
 }
 
