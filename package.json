@@ -29,6 +29,7 @@
     "@electron-forge/maker-dmg": "7.11.2",
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@types/node": "26.4.1",
+    "ali-oss": "^6.23.0",
     "electron": "44.2.0",
     "png-to-ico": "^3.0.2",
     "typescript": "7.0.2"

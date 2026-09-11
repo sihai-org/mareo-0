@@ -1,4 +1,5 @@
 const { execFileSync } = require("node:child_process");
+const { copyFile, rename } = require("node:fs/promises");
 const path = require("node:path");
 
 // Forge passes the build target on the command line (`--platform win32`), and
@@ -85,6 +86,26 @@ module.exports = {
       execFileSync(process.execPath, [
         path.join(__dirname, "scripts", "generate-icon.mjs"),
       ]);
+    },
+    postMake: async (_forgeConfig, makeResults) => {
+      // Canonical artifact names: Mareo-<version>-<os>-<arch>[...].<ext>
+      const results = Array.isArray(makeResults) ? makeResults : [makeResults];
+      for (const result of results) {
+        const version = result.packageJSON?.version;
+        if (!version) continue;
+        const arch = result.arch ?? process.arch;
+        for (const artifact of result.artifacts ?? []) {
+          if (result.platform === "darwin" && artifact.endsWith(".dmg")) {
+            const target = path.join(path.dirname(artifact), `Mareo-${version}-macos-${arch}.dmg`);
+            if (target !== artifact) await rename(artifact, target);
+          }
+          if (result.platform === "win32" && path.basename(artifact) === "MareoSetup.exe") {
+            // Keep MareoSetup.exe (Squirrel's update chain needs the fixed name)
+            // and publish a versioned copy for humans and manifests.
+            await copyFile(artifact, path.join(path.dirname(artifact), `Mareo-${version}-windows-${arch}-setup.exe`));
+          }
+        }
+      }
     },
     postPackage: async (_forgeConfig, { platform, outputPaths }) => {
       if (platform !== "darwin") return;

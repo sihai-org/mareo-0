@@ -347,6 +347,12 @@ h3 {
   background:var(--blue);
   color:white
 }
+.download-version {
+  margin:6px 0 0;
+  font-size:13px;
+  opacity:0.65;
+  min-height:1.2em
+}
 .release .release-note {
   font-size:12px;
   margin-top:12px

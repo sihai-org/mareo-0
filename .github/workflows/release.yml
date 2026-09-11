@@ -1,0 +1,180 @@
+name: Release
+
+# Tag a release to publish everything:   git tag v0.1.1 && git push origin v0.1.1
+# The tag must match package.json's version. Manual runs build only (no publish).
+#
+# Required secrets for a full publish:
+#   Apple (macOS signing + notarization)
+#     MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, APPLE_ID,
+#     APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#   Windows signing (optional)
+#     WINDOWS_CERT_BASE64, WINDOWS_CERT_PASSWORD
+#   Distribution (optional; without it artifacts stay on ECS/GitHub Release)
+#     OSS_REGION, OSS_BUCKET, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET
+#     ECS_HOST, ECS_SSH_KEY  (key = private key contents, to update the manifest)
+# Optional repository variable: RELEASE_DOWNLOAD_BASE (default https://mareo.cn/downloads)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  DOWNLOAD_BASE: ${{ vars.RELEASE_DOWNLOAD_BASE || 'https://mareo.cn/downloads' }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Tag must match package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "v${{ steps.read.outputs.version }}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${{ steps.read.outputs.version }}"
+            exit 1
+          fi
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Import signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_P12_BASE64" ]; then
+            echo "No MACOS_CERT_P12_BASE64 secret; building unsigned."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/mareo.keychain-db"
+          security create-keychain -p actions "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p actions "$KEYCHAIN"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+      - name: Build, sign and notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run make
+      - name: Verify signature and notarization
+        run: |
+          APP=out/Mareo-darwin-arm64/Mareo.app
+          if [ -d "$APP" ]; then
+            codesign --verify --deep --strict "$APP" && echo "signature ok"
+            xcrun stapler validate "$APP" && echo "notarization ok"
+            spctl -a -t exec -vv "$APP" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: out/make/*.dmg
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check:node:win
+      - name: Prepare signing certificate (optional)
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if (-not $env:CERT_BASE64) {
+            Write-Host "No WINDOWS_CERT_BASE64 secret; building an unsigned installer."
+            exit 0
+          }
+          $path = Join-Path $env:RUNNER_TEMP 'mareo-codesign.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:CERT_BASE64))
+          Add-Content -Path $env:GITHUB_ENV -Value "WINDOWS_CERT_FILE=$path"
+          Add-Content -Path $env:GITHUB_ENV -Value "WINDOWS_CERT_PASSWORD=$env:CERT_PASSWORD"
+          Add-Content -Path $env:GITHUB_ENV -Value "CSC_LINK=$path"
+          Add-Content -Path $env:GITHUB_ENV -Value "CSC_KEY_PASSWORD=$env:CERT_PASSWORD"
+      - run: npm run make:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            out/make/squirrel.windows/x64/*.exe
+            out/make/squirrel.windows/x64/*.nupkg
+            out/make/squirrel.windows/x64/RELEASES
+          if-no-files-found: error
+
+  publish:
+    needs: [version, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect installers
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.nupkg' -o -name 'RELEASES' \) -exec cp {} release/ \;
+          ls -lh release
+      - name: Build update manifest
+        run: |
+          node scripts/generate-release-manifest.mjs \
+            --version "${{ needs.version.outputs.version }}" \
+            --base "$DOWNLOAD_BASE" \
+            --macos "Mareo-${{ needs.version.outputs.version }}-macos-arm64.dmg" \
+            --windows "Mareo-${{ needs.version.outputs.version }}-windows-x64-setup.exe" \
+            --out release/latest.json
+          cat release/latest.json
+      - name: Upload to OSS (skipped when unconfigured)
+        env:
+          OSS_REGION: ${{ secrets.OSS_REGION }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: node scripts/publish-oss.mjs release/*
+      - name: Update the manifest on the website host (skipped when unconfigured)
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+        run: |
+          if [ -z "$ECS_HOST" ] || [ -z "$ECS_SSH_KEY" ]; then
+            echo "ECS_HOST/ECS_SSH_KEY not configured; manifest stays in the release artifacts."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ECS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new release/latest.json "$ECS_HOST:/var/www/mareo-site/updates/latest.json"
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

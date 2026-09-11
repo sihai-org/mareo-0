@@ -6,19 +6,12 @@ import vm from 'node:vm';
 const script = readFileSync(new URL('app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('index.html', import.meta.url), 'utf8');
 
-function configuredDownloads(source) {
-  const match = source.match(/const downloads = (\{[\s\S]*?\});/);
-  if (!match) return {};
-  return Function(`return (${match[1]});`)();
+function downloadFallback() {
+  const match = script.match(/const downloadFallback = (\{[\s\S]*?\});/);
+  return match ? Function(`return (${match[1]});`)() : {};
 }
 
-function openPage({ saved, storageBlocked = false, downloads } = {}) {
-  // downloads === undefined keeps the repository's configured values; any
-  // object overrides them for this page instance.
-  const body =
-    downloads === undefined
-      ? script
-      : script.replace(/const downloads = \{[\s\S]*?\};/, `const downloads = ${JSON.stringify(downloads)};`);
+async function openPage({ saved, storageBlocked = false, manifest, offline = false } = {}) {
   const buttons = ['zh-CN', 'en'].map(language => ({
     dataset: { language }, attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -27,25 +20,32 @@ function openPage({ saved, storageBlocked = false, downloads } = {}) {
   const meta = {}, languageGroup = { hidden: true };
   const links = { 'download-link': { hidden: true }, 'download-link-windows': { hidden: true } };
   const pendings = { 'download-pending': { hidden: false }, 'download-pending-windows': { hidden: false } };
+  const version = { textContent: '' };
   const document = {
     documentElement: { lang: 'zh-CN' },
     querySelectorAll: () => buttons,
     querySelector: selector => (selector === '.languages' ? languageGroup : meta),
-    getElementById: id => links[id] ?? pendings[id] ?? null,
+    getElementById: id => links[id] ?? pendings[id] ?? (id === 'download-version' ? version : null),
   };
   const storage = new Map(saved ? [['mareo-site-language', saved]] : []);
-  vm.runInNewContext(body, {
+  vm.runInNewContext(script, {
     document,
     localStorage: {
       getItem(key) { if (storageBlocked) throw Error('blocked'); return storage.get(key); },
       setItem(key, value) { if (storageBlocked) throw Error('blocked'); storage.set(key, value); },
     },
+    fetch: async () => {
+      if (offline) throw new Error('offline');
+      return { ok: true, json: async () => manifest };
+    },
   });
-  return { document, buttons, meta, storage, languageGroup, links, pendings };
+  // applyDownloads resolves asynchronously once the manifest has been read.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  return { document, buttons, meta, storage, languageGroup, links, pendings, version };
 }
 
-test('Chinese default, accessible language toggle and remembered English', () => {
-  const page = openPage();
+test('Chinese default, accessible language toggle and remembered English', async () => {
+  const page = await openPage({ manifest: { version: '0.1.0' } });
   assert.equal(page.document.documentElement.lang, 'zh-CN');
   assert.equal(page.languageGroup.hidden, false);
   page.buttons[1].click();
@@ -55,47 +55,58 @@ test('Chinese default, accessible language toggle and remembered English', () =>
   assert.equal(page.buttons[1].attributes['aria-pressed'], 'true');
   assert.equal(page.buttons[0].attributes['aria-pressed'], 'false');
   assert.equal(page.storage.get('mareo-site-language'), 'en');
-  assert.equal(openPage({ saved: 'en' }).document.documentElement.lang, 'en');
+
+  const remembered = await openPage({ saved: 'en', manifest: { version: '0.1.0' } });
+  assert.equal(remembered.document.documentElement.lang, 'en');
+
   page.buttons[0].click();
   assert.equal(page.document.documentElement.lang, 'zh-CN');
 });
 
-test('Invalid preferences and unavailable storage do not break the page', () => {
-  assert.equal(openPage({ saved: 'invalid' }).document.documentElement.lang, 'zh-CN');
-  const page = openPage({ storageBlocked: true });
+test('Invalid preferences and unavailable storage do not break the page', async () => {
+  const invalid = await openPage({ saved: 'invalid', manifest: { version: '0.1.0' } });
+  assert.equal(invalid.document.documentElement.lang, 'zh-CN');
+
+  const page = await openPage({ storageBlocked: true, manifest: { version: '0.1.0' } });
   page.buttons[1].click();
   assert.equal(page.document.documentElement.lang, 'en');
 });
 
-test('Each platform exposes its download only when a URL is configured', () => {
-  const configured = configuredDownloads(script);
-  const page = openPage();
+test('Downloads follow the published manifest per platform', async () => {
+  const page = await openPage({
+    manifest: {
+      version: '0.1.1',
+      downloads: {
+        macos: 'https://dl.mareo.cn/Mareo-0.1.1-macos-arm64.dmg',
+        windows: 'https://dl.mareo.cn/Mareo-0.1.1-windows-x64-setup.exe',
+      },
+    },
+  });
+  assert.equal(page.links['download-link'].href, 'https://dl.mareo.cn/Mareo-0.1.1-macos-arm64.dmg');
+  assert.equal(page.links['download-link-windows'].href, 'https://dl.mareo.cn/Mareo-0.1.1-windows-x64-setup.exe');
+  assert.equal(page.links['download-link'].hidden, false);
+  assert.equal(page.links['download-link-windows'].hidden, false);
+  assert.equal(page.pendings['download-pending'].hidden, true);
+  assert.equal(page.pendings['download-pending-windows'].hidden, true);
+  assert.equal(page.version.textContent, 'v0.1.1');
+});
 
-  for (const platform of ['macos', 'windows']) {
-    const suffix = platform === 'macos' ? '' : `-${platform}`;
-    const link = page.links[`download-link${suffix}`];
-    const pending = page.pendings[`download-pending${suffix}`];
-    if (configured[platform]) {
-      assert.equal(link.href, configured[platform]);
-      assert.equal(link.hidden, false);
-      assert.equal(pending.hidden, true);
-    } else {
-      assert.equal(link.hidden, true);
-      assert.equal(pending.hidden, false);
-    }
-  }
+test('A platform without a manifest entry keeps its coming-soon note', async () => {
+  const page = await openPage({
+    manifest: { version: '0.1.1', downloads: { macos: 'https://dl.mareo.cn/mac.dmg' } },
+  });
+  assert.equal(page.links['download-link'].hidden, false);
+  assert.equal(page.links['download-link-windows'].hidden, true);
+  assert.equal(page.pendings['download-pending-windows'].hidden, false);
+});
 
-  const bothOff = openPage({ downloads: { macos: '', windows: '' } });
-  assert.equal(bothOff.links['download-link'].hidden, true);
-  assert.equal(bothOff.pendings['download-pending'].hidden, false);
-  assert.equal(bothOff.links['download-link-windows'].hidden, true);
-  assert.equal(bothOff.pendings['download-pending-windows'].hidden, false);
-
-  const bothOn = openPage({ downloads: { macos: 'downloads/Mareo.dmg', windows: 'downloads/MareoSetup.exe' } });
-  assert.equal(bothOn.links['download-link'].href, 'downloads/Mareo.dmg');
-  assert.equal(bothOn.links['download-link-windows'].href, 'downloads/MareoSetup.exe');
-  assert.equal(bothOn.pendings['download-pending'].hidden, true);
-  assert.equal(bothOn.pendings['download-pending-windows'].hidden, true);
+test('An unreachable manifest falls back to the built-in links', async () => {
+  const fallback = downloadFallback();
+  const page = await openPage({ offline: true });
+  assert.equal(page.links['download-link'].href, fallback.macos);
+  assert.equal(page.links['download-link-windows'].href, fallback.windows);
+  assert.equal(page.links['download-link'].hidden, false);
+  assert.equal(page.links['download-link-windows'].hidden, false);
 });
 
 test('Static assets and fragment links resolve within the standalone directory', () => {

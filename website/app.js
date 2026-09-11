@@ -1,9 +1,11 @@
-// Set a relative path or HTTPS URL per platform once the installer exists;
-// an empty value keeps that platform's "coming soon" note visible.
-const downloads = {
+// Download links come from the published release manifest, so shipping a
+// release never requires editing this file; the fallbacks only cover a
+// manifest outage.
+const downloadFallback = {
   macos: 'downloads/Mareo-0.1.0-arm64.dmg',
   windows: 'downloads/MareoSetup.exe',
 };
+const MANIFEST_URL = 'updates/latest.json';
 
 const pageText = {
   'zh-CN': {
@@ -40,12 +42,32 @@ for (const button of languageButtons) {
   });
 }
 
-for (const [platform, url] of Object.entries(downloads)) {
-  if (!url) continue;
-  const link = document.getElementById(`download-link${platform === 'macos' ? '' : '-' + platform}`);
-  const pending = document.getElementById(`download-pending${platform === 'macos' ? '' : '-' + platform}`);
-  if (!link) continue;
-  link.href = url;
-  link.hidden = false;
-  if (pending) pending.hidden = true;
+async function applyDownloads() {
+  let downloads = { ...downloadFallback };
+  let version = '';
+  try {
+    const response = await fetch(MANIFEST_URL, { cache: 'no-store' });
+    if (response.ok) {
+      const manifest = await response.json();
+      if (typeof manifest.version === 'string') version = manifest.version;
+      if (manifest.downloads && typeof manifest.downloads === 'object') {
+        downloads = { macos: manifest.downloads.macos ?? '', windows: manifest.downloads.windows ?? '' };
+      }
+    }
+  } catch { /* Manifest unavailable: keep the fallback links. */ }
+
+  for (const [platform, url] of Object.entries(downloads)) {
+    if (!url) continue;
+    const link = document.getElementById(`download-link${platform === 'macos' ? '' : '-' + platform}`);
+    const pending = document.getElementById(`download-pending${platform === 'macos' ? '' : '-' + platform}`);
+    if (!link) continue;
+    link.href = url;
+    link.hidden = false;
+    if (pending) pending.hidden = true;
+  }
+
+  const versionLabel = document.getElementById('download-version');
+  if (versionLabel && version) versionLabel.textContent = `v${version}`;
 }
+
+applyDownloads();

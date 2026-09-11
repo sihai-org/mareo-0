@@ -19,7 +19,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const require = createRequire(import.meta.url)
 
 const packageJson = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf8'))
-const dmgName = `Mareo-${packageJson.version}-arm64.dmg`
+const dmgName = `Mareo-${packageJson.version}-macos-arm64.dmg`
 const appPath = path.join(projectRoot, 'out', 'Mareo-darwin-arm64', 'Mareo.app')
 const dmgPath = path.join(projectRoot, 'out', 'make', dmgName)
 
