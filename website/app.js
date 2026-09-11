@@ -2,7 +2,7 @@
 // release never requires editing this file; the fallbacks only cover a
 // manifest outage.
 const downloadFallback = {
-  macos: 'downloads/Mareo-0.1.0-arm64.dmg',
+  macos: 'downloads/Mareo-0.1.0-macos-arm64.dmg',
   windows: 'downloads/MareoSetup.exe',
 };
 const MANIFEST_URL = 'updates/latest.json';
