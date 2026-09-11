@@ -12,7 +12,8 @@ name: Release
 #   Distribution (optional; without it artifacts stay on ECS/GitHub Release)
 #     OSS_REGION, OSS_BUCKET, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET
 #     ECS_HOST, ECS_SSH_KEY  (key = private key contents, to update the manifest)
-# Optional repository variable: RELEASE_DOWNLOAD_BASE (default https://mareo.cn/downloads)
+# Repository variable: RELEASE_DOWNLOAD_BASE (e.g. https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com;
+# defaults to https://mareo.cn/downloads)
 
 on:
   push:

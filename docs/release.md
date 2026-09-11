@@ -49,22 +49,20 @@ RELEASES                             # （Phase 2）Squirrel 更新索引
 | macOS 签名 | `MACOS_CERT_P12_BASE64`、`MACOS_CERT_PASSWORD` |
 | macOS 公证 | `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID` |
 | Windows 签名（可选） | `WINDOWS_CERT_BASE64`、`WINDOWS_CERT_PASSWORD` |
-| OSS 上传（可选） | `OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` |
+| OSS 上传 | `OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` |
 | 官网清单更新（可选） | `ECS_HOST`（如 `root@114.55.15.112`）、`ECS_SSH_KEY`（部署私钥内容） |
 
-变量（Variables，可选）：`RELEASE_DOWNLOAD_BASE` —— 清单里下载链接的前缀，默认 `https://mareo.cn/downloads`；**接入 CDN 后改成 `https://dl.mareo.cn` 即可，不用改代码**。
+变量（Variables）：`RELEASE_DOWNLOAD_BASE` —— 清单里下载链接的前缀，默认 `https://mareo.cn/downloads`，接入 OSS 后设为 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com`。
 
 未配置的步骤会**自动跳过并打印提示**，所以可以先只配 Apple/Windows 证书跑通，再逐步接入 OSS/CDN。
 
-## 下载加速（OSS + CDN）接入步骤
+## 下载托管（OSS 直连）
 
-1. 阿里云开通 OSS，创建 Bucket（建议与用户同地域，如华东 1）
-2. 绑定自定义域名 `dl.mareo.cn`（该子域需解析到 OSS/CDN 并具备证书）
-3. 开通 CDN，源站指向该 Bucket，加速域名用 `dl.mareo.cn`
-4. 添加 Secrets：`OSS_REGION`（如 `oss-cn-hangzhou`）、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET`
-5. 设置变量 `RELEASE_DOWNLOAD_BASE=https://dl.mareo.cn`
-6. **兼容旧链接**：在 nginx 给 `mareo.cn/downloads/` 加 302 到 `https://dl.mareo.cn`（已发布客户端里写死的旧链接不会失效）
-7. 刷新 CDN 缓存（发新版后对 `latest.json` 做一次刷新，或给它设短缓存）
+安装包托管在阿里云 OSS，直连下载；完整步骤见 [`oss-setup.md`](oss-setup.md)。要点：
+
+- Bucket 保持**公共读**，地址形如 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/...`
+- 变量 `RELEASE_DOWNLOAD_BASE` 设为该地址（**以后接 CDN 只改这一个变量**）
+- 已发布客户端里的旧链接 `mareo.cn/downloads/...` 由 nginx 302 到 OSS
 
 ## 官网下载链接
 

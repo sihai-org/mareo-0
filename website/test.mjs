@@ -77,13 +77,13 @@ test('Downloads follow the published manifest per platform', async () => {
     manifest: {
       version: '0.1.1',
       downloads: {
-        macos: 'https://dl.mareo.cn/Mareo-0.1.1-macos-arm64.dmg',
-        windows: 'https://dl.mareo.cn/Mareo-0.1.1-windows-x64-setup.exe',
+        macos: 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/Mareo-0.1.1-macos-arm64.dmg',
+        windows: 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/Mareo-0.1.1-windows-x64-setup.exe',
       },
     },
   });
-  assert.equal(page.links['download-link'].href, 'https://dl.mareo.cn/Mareo-0.1.1-macos-arm64.dmg');
-  assert.equal(page.links['download-link-windows'].href, 'https://dl.mareo.cn/Mareo-0.1.1-windows-x64-setup.exe');
+  assert.equal(page.links['download-link'].href, 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/Mareo-0.1.1-macos-arm64.dmg');
+  assert.equal(page.links['download-link-windows'].href, 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/Mareo-0.1.1-windows-x64-setup.exe');
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, false);
   assert.equal(page.pendings['download-pending'].hidden, true);
@@ -93,7 +93,7 @@ test('Downloads follow the published manifest per platform', async () => {
 
 test('A platform without a manifest entry keeps its coming-soon note', async () => {
   const page = await openPage({
-    manifest: { version: '0.1.1', downloads: { macos: 'https://dl.mareo.cn/mac.dmg' } },
+    manifest: { version: '0.1.1', downloads: { macos: 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/mac.dmg' } },
   });
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, true);
