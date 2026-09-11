@@ -90,7 +90,9 @@ out\Mareo-win32-x64\Mareo.exe                  ← 免安装可执行（调试�
 
 - **快捷方式由应用自己创建**：Squirrel 安装/升级时会用 `--squirrel-install` / `--squirrel-updated` 启动应用，`src/squirrel.ts` + `src/main.ts` 收到后用 `Update.exe --createShortcut` 创建开始菜单与桌面快捷方式，然后立即退出。**若缺少这段处理，安装期间会误弹登录窗，且不会生成任何快捷方式**（旧版本正是如此）。
 - 卸载时 Squirrel 传 `--squirrel-uninstall`，应用调用 `--removeShortcut` 清理。
-- 安装期间的 loading 动画来自 `assets/installer-loading.gif`（由 `scripts/generate-installer-gif.py` 生成，需要 Pillow）。
+- 安装期间的 loading 动画来自 `assets/installer-loading.gif`：320×240 圆角浅色卡片、透明四角、Mareo 标识和中文安装提示，三个小圆点按 1.8 秒周期平缓循环。这是忙碌指示，不代表实际安装百分比。
+- GIF 已提交，Windows CI 直接使用，无需 Python 或字体。重新生成需要 Pillow 及包含中文字形的字体，例如在 macOS 执行：`python3 scripts/generate-installer-gif.py --font "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"`；Windows 可指定本机的微软雅黑字体文件。字体只用于本地栅格化，不打包字体文件。
+- 资源验证：`python3 -B -m unittest discover -s tests -p 'test_installer_gif.py'`。发布前还需在 Windows 上实际安装，检查浅色／深色桌面、100%／150%／200% 缩放下的圆角透明、文字和动画，以及安装结束后窗口正常消失。GIF 不支持半透明阴影；本设计不模拟原生模糊阴影。
 - “应用和功能”里的图标来自 `iconUrl`（`https://mareo.cn/downloads/app-icon.ico`）——**发布新版本前确认该文件已上传且可访问**。
 - 快捷方式缺失时的补救：`& "$env:LOCALAPPDATA\Mareo\Update.exe" --createShortcut Mareo.exe`
 
