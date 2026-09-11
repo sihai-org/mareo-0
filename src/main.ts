@@ -1,5 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { spawn } from 'node:child_process'
+import { appendFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import {
   checkToken,
@@ -23,6 +24,33 @@ let currentAccount: AccountSession | undefined
 // While the sign-in window is open there is no main window yet; the app must
 // not quit merely because all (gate) windows closed on a successful sign-in.
 let signInActive = false
+
+// Main-process failures are written to a log so a Windows user can send the
+// stack back when something goes wrong inside the shell.
+function logMainProcessError(kind: string, error: unknown): void {
+  try {
+    const logDirectory = path.join(app.getPath('userData'), 'logs')
+    mkdirSync(logDirectory, { recursive: true })
+    const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
+    appendFileSync(path.join(logDirectory, 'mareo-app.log'), `${new Date().toISOString()} ${kind} ${detail}\n`)
+  } catch {
+    // Logging must never replace the original failure.
+  }
+}
+
+process.on('uncaughtException', (error) => {
+  logMainProcessError('uncaughtException', error)
+  const logFile = path.join(app.getPath('userData'), 'logs', 'mareo-app.log')
+  const message = error instanceof Error ? error.message : String(error)
+  if (app.isReady()) {
+    dialog.showErrorBox('Mareo 遇到错误', `应用即将退出。\n\n${message}\n\n日志：${logFile}`)
+  }
+  app.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  logMainProcessError('unhandledRejection', reason)
+})
 
 app.setName('Mareo')
 // Keep existing installations' data independent of the display name.
@@ -101,6 +129,9 @@ async function resolveDshHome(accountId: string): Promise<string> {
 }
 
 async function startMareo(): Promise<void> {
+  // Windows/Linux show Electron's default File/Edit/View menu bar; macOS keeps
+  // its own system menu, so only the other platforms are cleared.
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'app-icon.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
