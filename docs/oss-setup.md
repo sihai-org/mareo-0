@@ -1,6 +1,6 @@
 # OSS 直连下载（阿里云）
 
-安装包托管在阿里云 OSS，直连下载（**暂不使用 CDN**）。下载地址形如：
+安装包托管在阿里云 OSS，用户直连下载。下载地址形如：
 
 ```
 https://<bucket>.<region>.aliyuncs.com/Mareo-0.1.1-macos-arm64.dmg
@@ -8,7 +8,7 @@ https://<bucket>.<region>.aliyuncs.com/Mareo-0.1.1-macos-arm64.dmg
 ```
 
 - OSS 自带 HTTPS（阿里云域名证书），**无需自己配证书、也不占用自有域名**
-- 带宽与稳定性远好于小带宽 ECS；以后要加速，只需把下载前缀换成 CDN 域名（改一个变量），客户端与代码都不用动
+- 带宽与稳定性远好于小带宽 ECS（ECS 上不再存安装包，只留官网与 gateway）
 
 ## 已有配置（你的环境）
 
@@ -57,7 +57,6 @@ Settings → Secrets and variables → Actions：
 | Variable | `RELEASE_DOWNLOAD_BASE` | `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com` |
 
 配置后，下次打 tag 发布时安装包会自动上传到 OSS，清单里的下载链接也会指向 OSS。
-（以后若接入 CDN，只把这个变量改成 CDN 域名即可。）
 
 ## 本地迁移（一次性，把现有安装包搬到 OSS）
 
@@ -98,5 +97,5 @@ location /downloads/ {
 ## 费用与注意
 
 - 存储费极低；主要成本是**外网流出流量**（国内约 ¥0.25–0.5/GB），建议在 OSS 控制台设置**流量封顶/告警**
-- 直连没有边缘缓存，热点下载会直接消耗 OSS 带宽——用户量上来后再考虑 CDN（改一个变量即可）
+- 下载走 OSS 外网，没有边缘缓存：热点下载直接消耗 OSS 带宽，用户量上来后再考虑加 CDN（只改 `RELEASE_DOWNLOAD_BASE` 一个变量）
 - 不要把 AccessKey 写进仓库；`.env.oss` 已在 .gitignore 中

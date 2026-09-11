@@ -1,4 +1,4 @@
-// Uploads release artifacts to Aliyun OSS (the origin behind the CDN).
+// Uploads release artifacts to Aliyun OSS.
 // Used by the release workflow; skips silently when OSS is not configured.
 //
 //   OSS_REGION=oss-cn-hangzhou OSS_BUCKET=mareo-downloads \

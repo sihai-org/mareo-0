@@ -1,7 +1,7 @@
 // Builds updates/latest.json for a release from the packaged artifacts.
 // Usage:
 //   node scripts/generate-release-manifest.mjs \
-//     --version 0.1.1 --base https://dl.mareo.cn \
+//     --version 0.1.1 --base https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com \
 //     --macos Mareo-0.1.1-macos-arm64.dmg \
 //     --windows Mareo-0.1.1-windows-x64-setup.exe \
 //     [--notes "修复 Windows 菜单栏"] [--out updates/latest.json]

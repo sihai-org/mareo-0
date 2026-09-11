@@ -33,9 +33,10 @@ async function manifestModule(): Promise<ManifestModule> {
 
 test('builds a manifest with absolute download URLs', async () => {
   const { buildReleaseManifest } = await manifestModule()
+  const ossBase = 'https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com'
   const manifest = buildReleaseManifest({
     version: '0.1.1',
-    baseUrl: 'https://dl.mareo.cn/',
+    baseUrl: `${ossBase}/`,
     macos: 'Mareo-0.1.1-macos-arm64.dmg',
     windows: 'Mareo-0.1.1-windows-x64-setup.exe',
     notes: '修复 Windows 菜单栏',
@@ -46,8 +47,8 @@ test('builds a manifest with absolute download URLs', async () => {
     releasedAt: '2026-09-12T00:00:00.000Z',
     notes: '修复 Windows 菜单栏',
     downloads: {
-      macos: 'https://dl.mareo.cn/Mareo-0.1.1-macos-arm64.dmg',
-      windows: 'https://dl.mareo.cn/Mareo-0.1.1-windows-x64-setup.exe',
+      macos: `${ossBase}/Mareo-0.1.1-macos-arm64.dmg`,
+      windows: `${ossBase}/Mareo-0.1.1-windows-x64-setup.exe`,
     },
   })
 })

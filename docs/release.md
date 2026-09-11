@@ -52,16 +52,16 @@ RELEASES                             # （Phase 2）Squirrel 更新索引
 | OSS 上传 | `OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` |
 | 官网清单更新（可选） | `ECS_HOST`（如 `root@114.55.15.112`）、`ECS_SSH_KEY`（部署私钥内容） |
 
-变量（Variables）：`RELEASE_DOWNLOAD_BASE` —— 清单里下载链接的前缀，默认 `https://mareo.cn/downloads`，接入 OSS 后设为 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com`。
+变量（Variables）：`RELEASE_DOWNLOAD_BASE` —— 清单里下载链接的前缀，设为 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com`。
 
-未配置的步骤会**自动跳过并打印提示**，所以可以先只配 Apple/Windows 证书跑通，再逐步接入 OSS/CDN。
+未配置的步骤会**自动跳过并打印提示**，所以可以先只配 Apple 证书跑通，再逐步接入 OSS。
 
 ## 下载托管（OSS 直连）
 
 安装包托管在阿里云 OSS，直连下载；完整步骤见 [`oss-setup.md`](oss-setup.md)。要点：
 
 - Bucket 保持**公共读**，地址形如 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com/...`
-- 变量 `RELEASE_DOWNLOAD_BASE` 设为该地址（**以后接 CDN 只改这一个变量**）
+- 变量 `RELEASE_DOWNLOAD_BASE` 设为该地址
 - 已发布客户端里的旧链接 `mareo.cn/downloads/...` 由 nginx 302 到 OSS
 
 ## 官网下载链接
