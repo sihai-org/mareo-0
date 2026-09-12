@@ -7,6 +7,7 @@ interface ReleaseManifest {
   version: string
   releasedAt: string
   notes?: string
+  minimumVersion?: string
   downloads?: Partial<Record<'macos' | 'windows', string>>
 }
 
@@ -16,6 +17,7 @@ interface ManifestInput {
   macos?: string
   windows?: string
   notes?: string
+  minimumVersion?: string
   releasedAt?: string
 }
 
@@ -63,6 +65,27 @@ test('omits platforms that were not built and defaults the timestamp', async () 
 test('rejects a version that is not semantic', async () => {
   const { buildReleaseManifest } = await manifestModule()
   assert.throws(() => buildReleaseManifest({ version: 'latest', baseUrl: 'https://x' }), /Invalid version/)
+})
+
+test('carries a minimum version only when the release sets one', async () => {
+  const { buildReleaseManifest } = await manifestModule()
+  const forced = buildReleaseManifest({
+    version: '0.2.0',
+    baseUrl: 'https://mareo.cn/downloads',
+    macos: 'm.dmg',
+    minimumVersion: '0.2.0',
+  })
+  assert.equal(forced.minimumVersion, '0.2.0')
+
+  const optional = buildReleaseManifest({
+    version: '0.2.0',
+    baseUrl: 'https://mareo.cn/downloads',
+    macos: 'm.dmg',
+    minimumVersion: '',
+  })
+  assert.equal('minimumVersion' in optional, false)
+
+  assert.throws(() => buildReleaseManifest({ version: '0.2.0', baseUrl: 'https://x', minimumVersion: 'newest' }))
 })
 
 test('parses release arguments with a default base URL', async () => {

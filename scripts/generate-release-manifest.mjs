@@ -8,7 +8,7 @@
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-export function buildReleaseManifest({ version, baseUrl, macos, windows, notes, releasedAt }) {
+export function buildReleaseManifest({ version, baseUrl, macos, windows, notes, minimumVersion, releasedAt }) {
   if (!/^\d+\.\d+\.\d+/.test(version ?? '')) throw new Error(`Invalid version: ${version}`)
   const base = baseUrl.replace(/\/+$/, '')
   const downloads = {}
@@ -16,6 +16,14 @@ export function buildReleaseManifest({ version, baseUrl, macos, windows, notes, 
   if (windows) downloads.windows = `${base}/${windows}`
   const manifest = { version, releasedAt: releasedAt ?? new Date().toISOString() }
   if (notes) manifest.notes = notes
+  // Clients older than this must update before they can be used; empty means the
+  // release is a normal optional update.
+  if (minimumVersion) {
+    if (!/^\d+\.\d+\.\d+(?:[-+].*)?$/.test(minimumVersion)) {
+      throw new Error(`Invalid minimum version: ${minimumVersion}`)
+    }
+    manifest.minimumVersion = minimumVersion
+  }
   if (Object.keys(downloads).length > 0) manifest.downloads = downloads
   return manifest
 }
@@ -31,6 +39,7 @@ export function parseArguments(argv) {
     macos: value('--macos'),
     windows: value('--windows'),
     notes: value('--notes'),
+    minimumVersion: value('--minimum-version'),
     out: value('--out'),
   }
 }

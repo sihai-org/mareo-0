@@ -1,12 +1,14 @@
 /**
  * Phase 1 update awareness: Mareo asks a static manifest whether a newer
  * release exists and points the user at the installer. Nothing is downloaded or
- * installed here — that is the later auto-update phase.
+ * installed here — that is the later auto-update phase. A release may also
+ * declare a minimum supported version, below which the app refuses to start.
  */
 export interface ReleaseManifest {
   version: string
   releasedAt?: string
   notes?: string
+  minimumVersion?: string
   downloads?: Partial<Record<'windows' | 'macos', string>>
 }
 
@@ -36,6 +38,15 @@ export function isNewerVersion(candidate: string, current: string): boolean {
   return compareVersions(candidate, current) > 0
 }
 
+/**
+ * True when the release requires an update: the running build is older than the
+ * manifest's minimum supported version. A malformed or absent minimum never
+ * blocks anyone.
+ */
+export function isUpdateRequired(manifest: ReleaseManifest, currentVersion: string): boolean {
+  return manifest.minimumVersion !== undefined && isNewerVersion(manifest.minimumVersion, currentVersion)
+}
+
 export function parseReleaseManifest(raw: unknown): ReleaseManifest | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined
   const record = raw as Record<string, unknown>
@@ -44,6 +55,9 @@ export function parseReleaseManifest(raw: unknown): ReleaseManifest | undefined 
   const manifest: ReleaseManifest = { version: record.version }
   if (typeof record.releasedAt === 'string') manifest.releasedAt = record.releasedAt
   if (typeof record.notes === 'string') manifest.notes = record.notes
+  if (typeof record.minimumVersion === 'string' && VERSION_PATTERN.test(record.minimumVersion)) {
+    manifest.minimumVersion = record.minimumVersion
+  }
 
   const downloads = record.downloads
   if (typeof downloads === 'object' && downloads !== null) {

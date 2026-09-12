@@ -15,7 +15,7 @@ import {
 import { prepareAccountHome } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
-import { fetchLatestRelease, isNewerVersion, selectDownloadUrl } from './update-check.js'
+import { fetchLatestRelease, isNewerVersion, isUpdateRequired, selectDownloadUrl } from './update-check.js'
 import { claimUpdatePrompt } from './update-prompt.js'
 
 let mainWindow: BrowserWindow | undefined
@@ -127,6 +127,10 @@ async function startMareo(): Promise<void> {
   // Windows/Linux show Electron's default File/Edit/View menu bar; macOS keeps
   // its own system menu, so only the other platforms are cleared.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+  if (!(await passesMinimumVersion())) {
+    app.quit()
+    return
+  }
   scheduleUpdateCheck()
   app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'app-icon.png'))
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -336,6 +340,36 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
 
 const UPDATE_MANIFEST_URL = process.env.MAREO_UPDATE_URL ?? 'https://mareo.cn/updates/latest.json'
 const UPDATE_PROMPT_FILE = 'update-prompt.json'
+
+/**
+ * A release can declare a minimum supported version; a build below it may not be
+ * used at all. This runs before the sign-in window and before DSH starts, so the
+ * old build simply never comes up. Every lookup failure lets the app start: a
+ * network problem at our end must never lock users out.
+ */
+async function passesMinimumVersion(): Promise<boolean> {
+  if (!app.isPackaged || process.env.MAREO_UPDATE_CHECK === 'off') return true
+  const manifest = await fetchLatestRelease(UPDATE_MANIFEST_URL)
+  if (manifest === undefined || !isUpdateRequired(manifest, app.getVersion())) return true
+  const downloadUrl = selectDownloadUrl(manifest)
+  // Without a download for this platform there is nowhere to send the user, and
+  // blocking would leave them stuck on an unusable app.
+  if (downloadUrl === undefined) return true
+
+  while (true) {
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      title: '请更新 Mareo',
+      message: `当前版本 ${app.getVersion()} 已不受支持，请更新到 ${manifest.version} 后继续使用。`,
+      detail: `${manifest.notes ?? '请下载并安装最新版本。'}\n\n下载页面已在浏览器中打开，安装完成后重新启动 Mareo。`,
+      buttons: ['前往下载', '退出'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (response !== 0) return false
+    await shell.openExternal(downloadUrl)
+  }
+}
 
 /** Local calendar day, so a reminder is not repeated after a quick restart. */
 function localDateStamp(): string {

@@ -4,6 +4,7 @@ import {
   compareVersions,
   fetchLatestRelease,
   isNewerVersion,
+  isUpdateRequired,
   parseReleaseManifest,
   selectDownloadUrl,
 } from '../src/update-check.js'
@@ -27,22 +28,35 @@ test('parses a well-formed manifest and rejects junk', () => {
     version: '0.1.1',
     releasedAt: '2026-09-12T10:00:00Z',
     notes: '修复 Windows 菜单栏',
+    minimumVersion: '0.1.0',
     downloads: { windows: 'https://mareo.cn/downloads/MareoSetup.exe', macos: '', other: 'x' },
   })
   assert.deepEqual(manifest, {
     version: '0.1.1',
     releasedAt: '2026-09-12T10:00:00Z',
     notes: '修复 Windows 菜单栏',
+    minimumVersion: '0.1.0',
     downloads: { windows: 'https://mareo.cn/downloads/MareoSetup.exe' },
   })
 
   assert.equal(parseReleaseManifest(null), undefined)
   assert.equal(parseReleaseManifest({ version: 'next' }), undefined)
   assert.equal(parseReleaseManifest({ downloads: {} }), undefined)
+  // A minimum that is not a version is ignored rather than trusted.
+  assert.deepEqual(parseReleaseManifest({ version: '0.1.1', minimumVersion: 'latest' }), { version: '0.1.1' })
 })
 
-test('picks the download for the running platform', () => {
-  const manifest = parseReleaseManifest({
+test('a release blocks builds below its minimum version', () => {
+  const manifest = parseReleaseManifest({ version: '0.2.0', minimumVersion: '0.2.0' })!
+
+  assert.equal(isUpdateRequired(manifest, '0.1.9'), true)
+  assert.equal(isUpdateRequired(manifest, '0.2.0'), false)
+  assert.equal(isUpdateRequired(manifest, '0.2.1'), false)
+  // No minimum in the release means nobody is forced to update.
+  assert.equal(isUpdateRequired({ version: '0.2.0' }, '0.1.0'), false)
+})
+
+test('picks the download for the running platform', () => {  const manifest = parseReleaseManifest({
     version: '0.1.1',
     downloads: { windows: 'https://mareo.cn/w.exe', macos: 'https://mareo.cn/m.dmg' },
   })!
