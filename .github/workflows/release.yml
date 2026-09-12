@@ -130,6 +130,9 @@ jobs:
     needs: [version, macos, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # Creating the GitHub Release needs a write token; repo defaults are read-only.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
