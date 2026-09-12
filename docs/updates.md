@@ -4,38 +4,42 @@
 
 ## 清单文件
 
-托管在官网静态目录：`https://mareo.cn/updates/latest.json`
+托管在官网静态目录：`https://mareo.cn/updates/latest.json`，**由发布流程自动生成**（`scripts/generate-release-manifest.mjs`）。
 
 ```json
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "releasedAt": "2026-09-12T10:00:00Z",
-  "notes": "修复 Windows 菜单栏；安装器快捷方式",
+  "notes": "修复账户隔离问题",
   "downloads": {
-    "windows": "https://mareo.cn/downloads/MareoSetup.exe",
-    "macos": "https://mareo.cn/downloads/Mareo-0.1.1-arm64.dmg"
+    "windows": "https://mareo.cn/downloads/Mareo-0.1.2-windows-x64-setup.exe",
+    "macos": "https://mareo.cn/downloads/Mareo-0.1.2-macos-arm64.dmg"
   }
 }
 ```
 
 - `version` 必填，语义化版本；客户端与 `app.getVersion()`（即 `package.json` 的 version）比较
 - `downloads` 按平台给直链；缺失的平台不会弹提示
-- 其余字段可选，`notes` 会显示在提示框里
+- `notes` 会显示在提示框里，来自**打 tag 时的注解**（见下）
 
 ## 客户端行为
 
 - 仅**打包版**在启动 10 秒后检查一次；开发模式不检查
-- 有新版本且当前平台有下载链接 → 弹窗「Mareo 有新版本」，按钮 `[前往下载] [稍后]`
+- 有新版本且当前平台有下载链接 → 弹窗「Mareo <新版本> 已发布」，按钮 `[前往下载] [明天再提醒]`
+- **每天最多提醒一次**（记录在 `<userData>/update-prompt.json`），避免每次启动都弹同一句话
 - **任何失败（离线、清单损坏、超时）都静默忽略**，绝不影响启动
 - 可用环境变量调试：`MAREO_UPDATE_URL`（换清单地址）、`MAREO_UPDATE_CHECK=off`（关闭检查）
 
 ## 发布新版本时
 
-1. 改 `package.json` 的 `version`（例如 `0.1.1`），构建并上传安装包
-2. 更新 `updates/latest.json`：`version` 填新版本、`downloads` 指向新安装包
-3. 建议同时把 `notes` 写成用户看得懂的一句话
+清单由 CI 生成，不需要手工维护。唯一要做的是**把更新说明写进 tag 注解**，它会出现在用户的提示框里：
 
-> 顺序很重要：**先传安装包，再改 latest.json**，避免用户点开链接时 404。
+```sh
+git tag -a v0.1.2 -m "修复账户隔离问题"     # 第一行就是用户看到的 notes
+git push origin v0.1.2
+```
+
+轻量 tag（`git tag v0.1.2`，无 `-m`）没有注解，此时回退到仓库 Variable `RELEASE_NOTES`；两者都为空则提示框使用默认文案。
 
 ## Phase 2（自动更新，尚未实现）
 

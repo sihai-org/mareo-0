@@ -16,6 +16,7 @@ import { prepareAccountHome } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 import { fetchLatestRelease, isNewerVersion, selectDownloadUrl } from './update-check.js'
+import { claimUpdatePrompt } from './update-prompt.js'
 
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
@@ -334,6 +335,13 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
 }
 
 const UPDATE_MANIFEST_URL = process.env.MAREO_UPDATE_URL ?? 'https://mareo.cn/updates/latest.json'
+const UPDATE_PROMPT_FILE = 'update-prompt.json'
+
+/** Local calendar day, so a reminder is not repeated after a quick restart. */
+function localDateStamp(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
+}
 
 /** Checks the release manifest once per launch, without blocking startup. */
 function scheduleUpdateCheck(): void {
@@ -348,13 +356,15 @@ async function notifyIfUpdateAvailable(): Promise<void> {
   if (manifest === undefined || !isNewerVersion(manifest.version, app.getVersion())) return
   const downloadUrl = selectDownloadUrl(manifest)
   if (downloadUrl === undefined) return
+  const promptState = path.join(app.getPath('userData'), UPDATE_PROMPT_FILE)
+  if (!(await claimUpdatePrompt(promptState, localDateStamp()))) return
 
   const options = {
     type: 'info' as const,
-    title: 'Mareo 有新版本',
-    message: `Mareo ${manifest.version} 已发布（当前 ${app.getVersion()}）`,
-    detail: manifest.notes ?? '建议更新以获得最新改进。',
-    buttons: ['前往下载', '稍后'],
+    title: `Mareo ${manifest.version} 已发布`,
+    message: `你正在使用 ${app.getVersion()}，建议更新到 ${manifest.version}。`,
+    detail: manifest.notes ?? '新版本包含功能改进与问题修复。',
+    buttons: ['前往下载', '明天再提醒'],
     defaultId: 0,
     cancelId: 1,
   }

@@ -8,7 +8,8 @@
 git commit -am "Release 0.1.1"
 git push
 # 2. 打 tag 并推送（tag 必须与 package.json 版本一致）
-git tag v0.1.1 && git push origin v0.1.1
+#    注解第一行会作为更新说明，显示在用户客户端的升级提示框里
+git tag -a v0.1.1 -m "修复账户隔离问题" && git push origin v0.1.1
 ```
 
 ## 触发与产物

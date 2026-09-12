@@ -149,12 +149,19 @@ jobs:
           find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.nupkg' -o -name 'RELEASES' \) -exec cp {} release/ \;
           ls -lh release
       - name: Build update manifest
+        env:
+          RELEASE_NOTES: ${{ vars.RELEASE_NOTES }}
         run: |
+          # An annotated tag ("git tag -a v0.1.3 -m '修复账户隔离问题'") becomes the
+          # in-app update note; the RELEASE_NOTES variable is the fallback.
+          NOTES="$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")"
+          if [ -z "$NOTES" ]; then NOTES="$RELEASE_NOTES"; fi
           node scripts/generate-release-manifest.mjs \
             --version "${{ needs.version.outputs.version }}" \
             --base "$DOWNLOAD_BASE" \
             --macos "Mareo-${{ needs.version.outputs.version }}-macos-arm64.dmg" \
             --windows "Mareo-${{ needs.version.outputs.version }}-windows-x64-setup.exe" \
+            --notes "$NOTES" \
             --out release/latest.json
           cat release/latest.json
       - name: Upload to OSS (skipped when unconfigured)
