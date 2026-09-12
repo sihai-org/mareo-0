@@ -1,15 +1,21 @@
 # 发布流程（tag 驱动，CI 自动出包）
 
-一次发布 = **打一个版本 tag**，其余全自动。
+一次发布 = **打一个版本 tag**，其余全自动。推荐用一键脚本，它会问你要版本号、更新说明和是否强制更新：
+
+```sh
+npm run release                 # 交互式（推荐）
+npm run release -- --dry-run    # 只看计划
+```
+
+脚本内部做的事（也可以手工执行）：
 
 ```sh
 # 1. 提升版本号（唯一真正的人工步骤）
-#    package.json 的 "version": "0.1.1"
-git commit -am "Release 0.1.1"
-git push
-# 2. 打 tag 并推送（tag 必须与 package.json 版本一致）
-#    注解第一行会作为更新说明，显示在用户客户端的升级提示框里
-git tag -a v0.1.1 -m "修复账户隔离问题" && git push origin v0.1.1
+#    package.json 的 "version": "0.1.3"
+git commit -am "Release 0.1.3"
+# 2. 打 tag：第一行是用户看到的更新说明，minimum-version 行表示强制更新
+git tag -a v0.1.3 -m "修复账户隔离问题" -m "minimum-version: 0.1.2"
+git push --atomic origin main v0.1.3
 ```
 
 ## 触发与产物

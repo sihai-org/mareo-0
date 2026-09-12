@@ -62,16 +62,20 @@ spctl -a -t exec -vv "$APP"            # 期望: accepted, source=Notarized Deve
 
 ## 一键发布
 
-`scripts/release.mjs`（`npm run release`）把整条发布链串成一条命令：
-检查证书 → `npm run make`（签名+公证）→ 本地验证（codesign/stapler/spctl）→ 上传 DMG 到服务器 `downloads/` → 同步官网文件 → 验证线上下载 URL → 打印 sha256。
-
-用法：
+`npm run release`（`scripts/release.mjs`）负责**发版本身**：改版本号 → 提交并推送 main → 打 tag。构建、签名、公证、上传 OSS、更新官网清单全部由 CI 完成，本地不需要证书或服务器配置。
 
 ```sh
-cp scripts/release.env.example .release.env   # 首次：填密钥与服务器（.release.env 已被 git 忽略）
-npm run release                               # 全流程
-npm run release -- --no-upload                # 只本地打包+验证，不发布
+npm run release                 # 交互式：推荐版本号（可改）→ 更新说明 → minimumVersion（留空 = 不强制）→ 确认
+npm run release -- --dry-run    # 只打印计划，不做任何改动
 ```
 
-> 若改了 `package.json` 的版本号，DMG 文件名随之变化——记得同步更新 `website/app.js` 的 `downloadUrl`（脚本结束时会提醒）。
+非交互用法（四项都要给全，用于脚本化）：
+
+```sh
+npm run release -- --version 0.1.3 --notes "修复账户隔离问题" --minimum-version "" --yes
+```
+
+脚本会先做安全检查：必须在 `main` 上、工作区干净、本地不落后远端、版本号未重复；任一项不满足就直接退出。推送 tag 后到 [Actions](https://github.com/ZheFeng/mareo-0/actions/workflows/release.yml) 看进度，约 20–40 分钟（含 Apple 公证）。
+
+签名、公证、OSS 上传所需的一切都在 GitHub Secrets 与 Variables 里，见 [`release.md`](release.md)。
 
