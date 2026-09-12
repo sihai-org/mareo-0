@@ -1,13 +1,41 @@
-import { access, cp, mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, rename, rm } from 'node:fs/promises'
 import path from 'node:path'
+
+/** User state written before per-account homes existed. */
+const LEGACY_ENTRIES = ['sessions', 'storages', 'settings.yaml'] as const
 
 /**
  * Per-account DSH homes. Each account gets its own DSH_HOME under
  * <dshBase>/accounts/<accountId>, so sessions, settings and storages are fully
  * isolated between accounts.
+ *
+ * The pre-isolation shared home belongs to the first account that runs on this
+ * machine after the upgrade: its state is moved — never copied — into that home,
+ * so no account created later can see it. State still sitting in the shared home
+ * while another account already exists is a leftover copy from an older build
+ * and is deleted. Credentials are deliberately left behind: a stored API key
+ * must not follow the account, and DSH recreates its profile on first boot.
  */
-export function accountHomePath(dshBase: string, accountId: string): string {
-  return path.join(dshBase, 'accounts', accountId)
+export async function prepareAccountHome(dshBase: string, accountId: string): Promise<string> {
+  const home = path.join(dshBase, 'accounts', accountId)
+  await mkdir(home, { recursive: true })
+
+  const accounts = await readdir(path.join(dshBase, 'accounts'))
+  const isFirstAccount = accounts.every((entry) => entry === accountId)
+
+  for (const entry of LEGACY_ENTRIES) {
+    const legacy = path.join(dshBase, entry)
+    if (!(await exists(legacy))) continue
+    const destination = path.join(home, entry)
+    // An account that already has state of its own keeps it; the shared home is
+    // stale by then and must not overwrite this account's data.
+    if (isFirstAccount && !(await exists(destination))) {
+      await rename(legacy, destination)
+      continue
+    }
+    await rm(legacy, { recursive: true, force: true })
+  }
+  return home
 }
 
 async function exists(target: string): Promise<boolean> {
@@ -17,25 +45,4 @@ async function exists(target: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-/**
- * One-time migration of the legacy shared home (pre-isolation layout) into the
- * given account home. Only user state is moved — sessions, storages and
- * settings.yaml. Credentials and runtime profiles are deliberately not copied:
- * old stored API keys must not follow the account, and DSH recreates its
- * profile on first boot. Runs at most once per account home (marker file).
- */
-export async function migrateLegacyHomeOnce(dshBase: string, accountHome: string): Promise<void> {
-  const marker = path.join(accountHome, '.legacy-migrated')
-  if (await exists(marker)) return
-
-  await mkdir(accountHome, { recursive: true })
-  for (const entry of ['sessions', 'storages', 'settings.yaml'] as const) {
-    const source = path.join(dshBase, entry)
-    if (await exists(source)) {
-      await cp(source, path.join(accountHome, entry), { recursive: true, force: true })
-    }
-  }
-  await writeFile(marker, '')
 }

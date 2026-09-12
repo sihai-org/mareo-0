@@ -12,7 +12,7 @@ import {
   signInWithEmailCode,
   type AccountSession,
 } from './account.js'
-import { accountHomePath, migrateLegacyHomeOnce } from './account-home.js'
+import { prepareAccountHome } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 import { fetchLatestRelease, isNewerVersion, selectDownloadUrl } from './update-check.js'
@@ -117,16 +117,9 @@ function runSquirrelAction(action: SquirrelAction): void {
   setTimeout(() => app.quit(), 1_000)
 }
 
-function legacyDshHome(): string {
+/** DSH data directory; per-account homes live in its accounts/ subdirectory. */
+function dshBasePath(): string {
   return path.join(app.getPath('userData'), 'dsh')
-}
-
-/** Per-account DSH_HOME; the first account migrates the legacy shared home. */
-async function resolveDshHome(accountId: string): Promise<string> {
-  const dshBase = legacyDshHome()
-  const home = accountHomePath(dshBase, accountId)
-  await migrateLegacyHomeOnce(dshBase, home)
-  return home
 }
 
 async function startMareo(): Promise<void> {
@@ -143,6 +136,19 @@ async function startMareo(): Promise<void> {
     return
   }
   currentAccount = account
+
+  // Signed-in accounts always carry an id. Without it we must not fall back to
+  // the shared DSH home, which still holds pre-isolation history.
+  if (!account.accountId) {
+    await dialog.showMessageBox({
+      type: 'error',
+      title: '登录信息不完整',
+      message: '无法确认当前账户，Mareo 已退出以避免本地数据混用。',
+      buttons: ['退出'],
+    })
+    app.quit()
+    return
+  }
 
   mainWindow = new BrowserWindow({
     title: 'Mareo',
@@ -171,7 +177,7 @@ async function startMareo(): Promise<void> {
       const runtimeDirectory = app.isPackaged
         ? process.resourcesPath
         : path.join(app.getAppPath(), '.staging')
-      const dshHome = account.accountId ? await resolveDshHome(account.accountId) : legacyDshHome()
+      const dshHome = await prepareAccountHome(dshBasePath(), account.accountId)
       dshRuntime = await startDshRuntime({
         runtimeDirectory: path.join(runtimeDirectory, 'dsh-runtime'),
         nodeExecutable: path.join(runtimeDirectory, 'node-runtime', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),

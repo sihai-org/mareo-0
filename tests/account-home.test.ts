@@ -1,59 +1,98 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { access, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { accountHomePath, migrateLegacyHomeOnce } from '../src/account-home.js'
+import { prepareAccountHome } from '../src/account-home.js'
 
-let directory: string
-let dshBase: string
+let root: string
 
-test.before(() => {
-  directory = mkdtempSync(path.join(tmpdir(), 'mareo-account-home-'))
-  dshBase = path.join(directory, 'dsh')
-  // A legacy shared home with user state to migrate.
-  mkdirSync(path.join(dshBase, 'sessions', 's1'), { recursive: true })
-  writeFileSync(path.join(dshBase, 'sessions', 's1', 'session.jsonl'), '{}')
-  mkdirSync(path.join(dshBase, 'storages'))
-  writeFileSync(path.join(dshBase, 'settings.yaml'), 'ui-onboarding:\n  welcomeNoticeVersion: x\n')
+test.before(async () => {
+  root = await mkdtemp(path.join(tmpdir(), 'mareo-account-home-'))
+})
+
+test.after(async () => {
+  await rm(root, { recursive: true, force: true })
+})
+
+/** A DSH base directory holding the pre-isolation shared home. */
+async function dshBaseWithLegacyState(): Promise<string> {
+  const base = path.join(await mkdtemp(path.join(root, 'dsh-')), 'dsh')
+  await mkdir(path.join(base, 'sessions', 's1'), { recursive: true })
+  await writeFile(path.join(base, 'sessions', 's1', 'session.jsonl'), '{}')
+  await mkdir(path.join(base, 'storages'), { recursive: true })
+  await writeFile(path.join(base, 'settings.yaml'), 'ui-onboarding:\n  welcomeNoticeVersion: x\n')
   // Credentials must never follow an account migration.
-  writeFileSync(path.join(dshBase, '.credentials.yaml'), 'secret')
+  await writeFile(path.join(base, '.credentials.yaml'), 'secret')
+  return base
+}
+
+test('the first account takes over the pre-isolation state', async () => {
+  const base = await dshBaseWithLegacyState()
+  const home = await prepareAccountHome(base, 'acct-1')
+
+  assert.equal(home, path.join(base, 'accounts', 'acct-1'))
+  assert.equal(await exists(path.join(home, 'sessions', 's1', 'session.jsonl')), true)
+  assert.equal(await exists(path.join(home, 'storages')), true)
+  assert.equal(await exists(path.join(home, 'settings.yaml')), true)
+  // Credentials are left behind on purpose, and the shared home is emptied so
+  // that nothing can be handed to another account.
+  assert.equal(await exists(path.join(home, '.credentials.yaml')), false)
+  assert.equal(await exists(path.join(base, 'sessions')), false)
+  assert.equal(await exists(path.join(base, 'settings.yaml')), false)
+
+  // Running again for the same account keeps its state.
+  await prepareAccountHome(base, 'acct-1')
+  assert.equal(await exists(path.join(home, 'sessions', 's1', 'session.jsonl')), true)
 })
 
-test.after(() => {
-  rmSync(directory, { recursive: true, force: true })
+test('an account created later never sees the pre-isolation state', async () => {
+  const base = await dshBaseWithLegacyState()
+  await prepareAccountHome(base, 'acct-1')
+  const home = await prepareAccountHome(base, 'acct-2')
+
+  assert.equal(await exists(path.join(home, 'sessions')), false)
+  assert.equal(await exists(path.join(home, 'storages')), false)
+  assert.equal(await exists(path.join(home, 'settings.yaml')), false)
 })
 
-test('migrates user state once into the per-account home and skips credentials', async () => {
-  const accountHome = accountHomePath(dshBase, 'acct-1')
-  await migrateLegacyHomeOnce(dshBase, accountHome)
+test('leftover shared state is discarded once another account exists', async () => {
+  const base = await dshBaseWithLegacyState()
+  // An older build copied the shared home into every account, so the account
+  // copy and the untouched shared home both exist.
+  await mkdir(path.join(base, 'accounts', 'acct-1', 'sessions', 's1'), { recursive: true })
+  await writeFile(path.join(base, 'accounts', 'acct-1', 'sessions', 's1', 'session.jsonl'), '{}')
 
-  assert.equal(accountHome, path.join(dshBase, 'accounts', 'acct-1'))
-  assert.equal(await exists(accountHome), true)
-  assert.equal(await exists(path.join(accountHome, 'sessions', 's1', 'session.jsonl')), true)
-  assert.equal(await exists(path.join(accountHome, 'storages')), true)
-  assert.equal(await exists(path.join(accountHome, 'settings.yaml')), true)
-  // Credentials are left behind on purpose.
-  assert.equal(await exists(path.join(accountHome, '.credentials.yaml')), false)
+  const home = await prepareAccountHome(base, 'acct-2')
 
-  // A second call is a no-op (marker), and other accounts are isolated.
-  await migrateLegacyHomeOnce(dshBase, accountHome)
-  const otherHome = accountHomePath(dshBase, 'acct-2')
-  await migrateLegacyHomeOnce(dshBase, otherHome)
-  assert.equal(await exists(path.join(otherHome, 'sessions', 's1', 'session.jsonl')), true)
+  assert.equal(await exists(path.join(home, 'sessions')), false)
+  assert.equal(await exists(path.join(base, 'sessions')), false)
+  assert.equal(await exists(path.join(base, 'settings.yaml')), false)
 })
 
-test('does nothing when there is no legacy state', async () => {
-  const emptyBase = path.join(directory, 'empty-dsh')
-  const home = accountHomePath(emptyBase, 'acct-x')
-  await migrateLegacyHomeOnce(emptyBase, home)
-  assert.equal(await exists(home), true)
-  assert.equal(await exists(path.join(home, '.legacy-migrated')), true)
+test('an account with state of its own is not overwritten by the shared home', async () => {
+  const base = await dshBaseWithLegacyState()
+  const home = path.join(base, 'accounts', 'acct-1')
+  await mkdir(path.join(home, 'sessions', 'own'), { recursive: true })
+  await writeFile(path.join(home, 'sessions', 'own', 'session.jsonl'), '{}')
+
+  await prepareAccountHome(base, 'acct-1')
+
+  assert.equal(await exists(path.join(home, 'sessions', 'own', 'session.jsonl')), true)
+  assert.equal(await exists(path.join(home, 'sessions', 's1')), false)
+  assert.equal(await exists(path.join(base, 'sessions')), false)
+})
+
+test('a fresh install only creates the account home', async () => {
+  const base = path.join(await mkdtemp(path.join(root, 'dsh-')), 'dsh')
+  const home = await prepareAccountHome(base, 'acct-1')
+
+  assert.deepEqual(await readdir(home), [])
 })
 
 async function exists(target: string): Promise<boolean> {
   try {
-    await import('node:fs/promises').then((fs) => fs.access(target))
+    await access(target)
     return true
   } catch {
     return false
