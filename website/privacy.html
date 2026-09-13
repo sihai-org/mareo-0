@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>隐私说明 — Mareo</title>
+    <meta name="description" content="Mareo 收集哪些数据、用来做什么、如何关闭。" />
+    <link rel="icon" href="assets/app-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .legal { max-width: 780px; margin: 0 auto; padding: 48px 24px 72px; line-height: 1.85; }
+      .legal h1 { font-size: 30px; margin-bottom: 8px; }
+      .legal h2 { font-size: 19px; margin: 32px 0 10px; }
+      .legal p, .legal li { opacity: 0.86; }
+      .legal table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+      .legal th, .legal td { border: 1px solid rgba(128, 128, 128, 0.3); padding: 8px 10px; text-align: left; }
+      .legal code { background: rgba(128, 128, 128, 0.16); padding: 1px 5px; border-radius: 4px; }
+      .legal .updated { opacity: 0.6; font-size: 14px; }
+      .legal .back { display: inline-block; margin-bottom: 24px; }
+    </style>
+  </head>
+  <body>
+    <main class="legal">
+      <a class="back" href="index.html">← 返回 Mareo</a>
+      <h1>隐私说明</h1>
+      <p class="updated">最后更新：2026-09-12</p>
+
+      <h2>我们收集什么</h2>
+      <p>为了知道 Mareo <strong>能否正常安装、启动、登录</strong>，客户端会上报以下匿名统计事件：</p>
+      <table>
+        <thead>
+          <tr><th>事件</th><th>触发时机</th><th>携带内容</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>install_confirmed</code></td><td>首次安装后成功启动并登录</td><td>版本号、操作系统、CPU 架构</td></tr>
+          <tr><td><code>launch</code></td><td>每次启动结束时</td><td>版本号、操作系统、成功与否、失败阶段、耗时毫秒</td></tr>
+          <tr><td><code>harness_exit</code></td><td>内置引擎意外退出时</td><td>版本号、操作系统、已运行时长、错误描述（截断）</td></tr>
+          <tr><td><code>signin</code></td><td>登录流程结束时</td><td>版本号、操作系统、结果（成功／验证码错误／发信失败／超时／取消）</td></tr>
+        </tbody>
+      </table>
+      <p>
+        <strong>不收集</strong>：对话内容、提示词、模型回复、附件、邮箱地址、昵称、访问令牌、IP 地址（服务端不落库）、设备指纹（无任何持久化设备标识）。
+      </p>
+      <ul>
+        <li>登录成功前客户端没有账号凭据，此时的登录失败事件是<strong>匿名</strong>的，否则我们无法发现"装上了但登不进去"这类故障。</li>
+        <li>服务端为限流会<strong>在内存中短暂</strong>处理请求来源 IP，不写入数据库、不用于其他用途。</li>
+      </ul>
+
+      <h2>用来做什么</h2>
+      <p>统计安装成功率、首次启动稳定性、登录与模型调用稳定性、引擎异常退出率，用于发现并修复故障。不用于广告，不用于用户画像，不向第三方出售或共享。</p>
+
+      <h2>模型请求</h2>
+      <p>
+        聊天内容由客户端发起、经 Mareo 网关转发到 DeepSeek 完成推理。网关会记录每次请求的<strong>用量元数据</strong>（账号、模型名、字符数、耗时、HTTP 状态码），用于配额与故障排查，<strong>不记录对话内容</strong>。
+      </p>
+
+      <h2>你的选择</h2>
+      <ul>
+        <li>在 Mareo 里打开<strong>设置 → 账户 → 发送匿名使用统计</strong>，关闭后客户端立即停止上报。</li>
+        <li>关闭统计不影响 Mareo 的任何功能。</li>
+        <li>需要删除已上报的数据？发邮件到 <a href="mailto:contact@mareo.ai">contact@mareo.ai</a> 说明你的账号，我们会删除该账号关联的全部事件记录。</li>
+      </ul>
+
+      <h2>数据存放与保留</h2>
+      <p>事件与用量数据存放在 Mareo 自有的阿里云服务器（中国杭州），保留 180 天，到期自动清理。</p>
+
+      <h2>变更</h2>
+      <p>本说明如有变更，会在本页更新并标注日期。</p>
+
+      <p class="updated">联系：<a href="mailto:contact@mareo.ai">contact@mareo.ai</a></p>
+    </main>
+  </body>
+</html>
