@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { loadPreferences, preferencesPath, savePreferences } from '../src/preferences.js'
-import { Telemetry } from '../src/telemetry.js'
+import { stripLocalPaths, Telemetry } from '../src/telemetry.js'
 
 let root: string
 
@@ -114,6 +114,26 @@ test('truncates detail so nothing long can be smuggled in', async () => {
 
   await telemetry.sendNow({ name: 'harness_exit', detail: { error: 'x'.repeat(900) } })
   assert.equal(sent[0].body.events[0].detail?.length, 500)
+})
+
+test('reported errors keep local paths — and the user name in them — out', () => {
+  assert.equal(
+    stripLocalPaths(
+      "ENOENT: no such file or directory, open '/Users/zhefeng/Library/Application Support/Mareo/dsh/accounts/x/mareo.log'",
+    ),
+    'ENOENT: no such file or directory, open \'<path>\'',
+  )
+  // Ordinary messages are untouched.
+  assert.equal(
+    stripLocalPaths('DeepSeek Harness exited unexpectedly (code 1).'),
+    'DeepSeek Harness exited unexpectedly (code 1).',
+  )
+  assert.equal(
+    stripLocalPaths('Timed out waiting for DeepSeek Harness to report its local address.'),
+    'Timed out waiting for DeepSeek Harness to report its local address.',
+  )
+  assert.equal(stripLocalPaths('/Users/zhefeng/Mareo/logs/mareo.log'), '<path>')
+  assert.equal(stripLocalPaths('x'.repeat(400)).length, 200)
 })
 
 test('preferences default to on, persist, and survive junk', async () => {

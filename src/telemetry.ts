@@ -29,6 +29,15 @@ interface Envelope {
 
 const MAX_DETAIL_LENGTH = 500
 
+/**
+ * Error text can carry absolute paths, and a home directory carries the local
+ * user name, so whole paths — including ones with spaces — are replaced before
+ * anything leaves the machine.
+ */
+export function stripLocalPaths(message: string): string {
+  return message.replace(/(?:\/[\w.@+-]+(?: [\w.@+-]+)*){2,}/g, '<path>').slice(0, 200)
+}
+
 export class Telemetry {
   private readonly endpoint: string
   private readonly version: string

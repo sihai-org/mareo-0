@@ -18,7 +18,7 @@ import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 import { fetchLatestRelease, isNewerVersion, isUpdateRequired, selectDownloadUrl } from './update-check.js'
 import { claimUpdatePrompt } from './update-prompt.js'
 import { loadPreferences, savePreferences, type Preferences } from './preferences.js'
-import { Telemetry, type TelemetryEvent } from './telemetry.js'
+import { stripLocalPaths, Telemetry, type TelemetryEvent } from './telemetry.js'
 
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
@@ -249,7 +249,7 @@ async function startMareo(): Promise<void> {
       await dshRuntime?.stop()
       dshRuntime = undefined
       const detail = error instanceof Error ? error.message : String(error)
-      recordEvent({ name: 'launch', detail: { ok: false, stage: 'harness', error: detail.slice(0, 200) } })
+      recordEvent({ name: 'launch', detail: { ok: false, stage: 'harness', error: stripLocalPaths(detail) } })
       await telemetry.flush()
       const choice = await dialog.showMessageBox(mainWindow, {
         type: 'error',
@@ -576,7 +576,7 @@ function showUnexpectedExit(message: string): void {
   dshRuntime = undefined
   recordEvent({
     name: 'harness_exit',
-    detail: { reason: message.slice(0, 200), ms: dshStartedAt === 0 ? 0 : Date.now() - dshStartedAt },
+    detail: { reason: stripLocalPaths(message), ms: dshStartedAt === 0 ? 0 : Date.now() - dshStartedAt },
   })
   if (!mainWindow || mainWindow.isDestroyed()) return
   void dialog
