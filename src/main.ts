@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { spawn } from 'node:child_process'
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   checkToken,
@@ -17,6 +17,8 @@ import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 import { fetchLatestRelease, isNewerVersion, isUpdateRequired, selectDownloadUrl } from './update-check.js'
 import { claimUpdatePrompt } from './update-prompt.js'
+import { loadPreferences, savePreferences, type Preferences } from './preferences.js'
+import { Telemetry, type TelemetryEvent } from './telemetry.js'
 
 let mainWindow: BrowserWindow | undefined
 let dshRuntime: DshRuntime | undefined
@@ -26,6 +28,16 @@ let currentAccount: AccountSession | undefined
 // While the sign-in window is open there is no main window yet; the app must
 // not quit merely because all (gate) windows closed on a successful sign-in.
 let signInActive = false
+// Anonymous operational statistics; undefined until preferences are loaded.
+let telemetry: Telemetry | undefined
+let preferences: Preferences | undefined
+// Reported with a harness exit so a crash has a duration attached to it.
+let dshStartedAt = 0
+
+/** Anonymous event; a no-op when the user turned statistics off. */
+function recordEvent(event: TelemetryEvent): void {
+  telemetry?.record(event)
+}
 
 // Main-process failures are written to a log so a Windows user can send the
 // stack back when something goes wrong inside the shell.
@@ -88,6 +100,8 @@ if (squirrelAction !== undefined) {
     if (!signInActive) app.quit()
   })
   app.on('before-quit', (event) => {
+    // Best effort: whatever is still queued goes out with the shutdown.
+    void telemetry?.flush()
     if (shutdownComplete || !dshRuntime) return
     event.preventDefault()
     const runtime = dshRuntime
@@ -123,11 +137,34 @@ function dshBasePath(): string {
   return path.join(app.getPath('userData'), 'dsh')
 }
 
+/**
+ * A first successful launch is what tells us an install actually worked. It is
+ * reported once per installation, and the marker is only written when the report
+ * arrived so a failed send is retried on the next launch.
+ */
+async function reportFirstInstall(): Promise<void> {
+  const marker = path.join(app.getPath('userData'), '.install-reported')
+  if (telemetry === undefined || existsSync(marker)) return
+  if (await telemetry.sendNow({ name: 'install_confirmed', detail: { arch: process.arch } })) {
+    writeFileSync(marker, '')
+  }
+}
+
 async function startMareo(): Promise<void> {
+  const startedAt = Date.now()
+  preferences = await loadPreferences(app.getPath('userData'))
+  telemetry = new Telemetry({
+    endpoint: `${GATEWAY_URL}/events`,
+    version: app.getVersion(),
+    // MAREO_TELEMETRY=off is a debugging escape hatch for the same switch.
+    enabled: preferences.telemetry && process.env.MAREO_TELEMETRY !== 'off',
+  })
   // Windows/Linux show Electron's default File/Edit/View menu bar; macOS keeps
   // its own system menu, so only the other platforms are cleared.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   if (!(await passesMinimumVersion())) {
+    recordEvent({ name: 'launch', detail: { ok: false, stage: 'update-required' } })
+    await telemetry.flush()
     app.quit()
     return
   }
@@ -137,14 +174,19 @@ async function startMareo(): Promise<void> {
 
   const account = await acquireAccountSession()
   if (!account) {
+    recordEvent({ name: 'launch', detail: { ok: false, stage: 'signed-out' } })
+    await telemetry.flush()
     app.quit()
     return
   }
   currentAccount = account
+  telemetry.setToken(account.token)
 
   // Signed-in accounts always carry an id. Without it we must not fall back to
   // the shared DSH home, which still holds pre-isolation history.
   if (!account.accountId) {
+    recordEvent({ name: 'launch', detail: { ok: false, stage: 'account-incomplete' } })
+    await telemetry.flush()
     await dialog.showMessageBox({
       type: 'error',
       title: '登录信息不完整',
@@ -198,15 +240,22 @@ async function startMareo(): Promise<void> {
       })
       secureDshWindow(mainWindow, dshRuntime.origin)
       await mainWindow.loadURL(dshRuntime.url)
+      dshStartedAt = Date.now()
+      recordEvent({ name: 'launch', detail: { ok: true, ms: Date.now() - startedAt } })
+      await telemetry.flush()
+      await reportFirstInstall()
       return
     } catch (error) {
       await dshRuntime?.stop()
       dshRuntime = undefined
+      const detail = error instanceof Error ? error.message : String(error)
+      recordEvent({ name: 'launch', detail: { ok: false, stage: 'harness', error: detail.slice(0, 200) } })
+      await telemetry.flush()
       const choice = await dialog.showMessageBox(mainWindow, {
         type: 'error',
         title: 'Mareo could not start',
         message: 'DeepSeek Harness failed to start.',
-        detail: error instanceof Error ? error.message : String(error),
+        detail,
         buttons: ['Retry', 'Quit'],
         defaultId: 0,
         cancelId: 1,
@@ -222,8 +271,7 @@ async function startMareo(): Promise<void> {
 /**
  * Returns the account for this launch, showing the sign-in screen when no
  * valid account is stored. Returns undefined when the user quits.
- */
-async function acquireAccountSession(): Promise<AccountSession | undefined> {
+ */async function acquireAccountSession(): Promise<AccountSession | undefined> {
   const stored = loadAccountSession()
   if (stored && stored.token) {
     const check = await checkToken(stored.token)
@@ -253,6 +301,8 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
     const settle = (account?: AccountSession): void => {
       if (settled) return
       settled = true
+      // Closing the sign-in window without signing in is itself a funnel signal.
+      if (account === undefined) recordEvent({ name: 'signin', detail: { result: 'cancelled' } })
       for (const name of handlers) ipcMain.removeHandler(name)
       if (!signInWindow.isDestroyed()) signInWindow.destroy()
       signInActive = false
@@ -275,6 +325,12 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
     })
     signInWindow.on('closed', () => settle(undefined))
     signInWindow.once('ready-to-show', () => signInWindow.show())
+    // The privacy notice links out; without this Electron would open a blank
+    // in-app window instead of the browser.
+    signInWindow.webContents.setWindowOpenHandler(({ url }) => {
+      void shell.openExternal(url)
+      return { action: 'deny' }
+    })
 
     const gatewayError = `无法连接 Mareo 服务（${GATEWAY_URL}），请稍后重试。`
 
@@ -285,6 +341,7 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
       const token = rawToken.trim()
       const check = await checkToken(token)
       if (!check.valid) {
+        recordEvent({ name: 'signin', detail: { result: check.reason === 'invalid' ? 'token-invalid' : 'unreachable', method: 'token' } })
         return {
           ok: false,
           error: check.reason === 'invalid' ? '该访问令牌无效，请联系管理员。' : gatewayError,
@@ -292,6 +349,7 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
       }
       const account = { token, accountId: check.accountId }
       saveAccountSession(account)
+      recordEvent({ name: 'signin', detail: { result: 'ok', method: 'token' } })
       settle(account)
       return { ok: true }
     })
@@ -301,7 +359,11 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
         return { ok: false, error: '邮箱地址格式不正确。' }
       }
       const result = await requestEmailCode(rawEmail.trim())
-      if (result.ok) return { ok: true }
+      if (result.ok) {
+        recordEvent({ name: 'signin', detail: { result: 'send-ok' } })
+        return { ok: true }
+      }
+      recordEvent({ name: 'signin', detail: { result: `send-${result.reason}` } })
       const messages = {
         cooldown: '发送过于频繁，请 60 秒后再试。',
         'daily-limit': '该邮箱今日发送次数已达上限，请明天再试。',
@@ -318,6 +380,7 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
       }
       const result = await signInWithEmailCode(rawEmail.trim(), rawCode.trim())
       if (!result.ok) {
+        recordEvent({ name: 'signin', detail: { result: result.reason, method: 'email' } })
         const messages = {
           'no-code': '请先获取验证码。',
           expired: '验证码已过期，请重新获取。',
@@ -330,6 +393,7 @@ function promptForSignIn(): Promise<AccountSession | undefined> {
       }
       const account = { token: result.token, accountId: result.accountId }
       saveAccountSession(account)
+      recordEvent({ name: 'signin', detail: { result: 'ok', method: 'email' } })
       settle(account)
       return { ok: true }
     })
@@ -408,6 +472,19 @@ async function notifyIfUpdateAvailable(): Promise<void> {
 }
 
 function registerAccountBridge(): void {
+  ipcMain.handle('mareo:telemetry:get', () => ({ ok: true, enabled: preferences?.telemetry ?? true }))
+  ipcMain.handle('mareo:telemetry:set', async (_event, rawEnabled: unknown) => {
+    if (typeof rawEnabled !== 'boolean' || preferences === undefined) return { ok: false }
+    preferences = { ...preferences, telemetry: rawEnabled }
+    telemetry?.setEnabled(rawEnabled && process.env.MAREO_TELEMETRY !== 'off')
+    try {
+      await savePreferences(app.getPath('userData'), preferences)
+    } catch (error) {
+      logMainProcessError('save-preferences', error)
+      return { ok: false }
+    }
+    return { ok: true, enabled: preferences.telemetry }
+  })
   ipcMain.handle('mareo:account:get', async () => {
     if (!currentAccount) return { ok: false, error: 'signed-out' }
     try {
@@ -497,6 +574,10 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
 
 function showUnexpectedExit(message: string): void {
   dshRuntime = undefined
+  recordEvent({
+    name: 'harness_exit',
+    detail: { reason: message.slice(0, 200), ms: dshStartedAt === 0 ? 0 : Date.now() - dshStartedAt },
+  })
   if (!mainWindow || mainWindow.isDestroyed()) return
   void dialog
     .showMessageBox(mainWindow, {

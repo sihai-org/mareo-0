@@ -60,6 +60,7 @@ function AccountSection() {
   const [name, setName] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
+  const [telemetry, setTelemetry] = React.useState(null)
 
   React.useEffect(() => {
     if (!window.__mareoAccount) return
@@ -69,6 +70,11 @@ function AccountSection() {
         setName(result.displayName)
       }
     }).catch(() => {})
+    if (window.__mareoTelemetry) {
+      window.__mareoTelemetry.get().then((result) => {
+        if (result.ok) setTelemetry(result.enabled)
+      }).catch(() => {})
+    }
   }, [])
 
   if (!window.__mareoAccount) {
@@ -97,6 +103,12 @@ function AccountSection() {
     // The host tears the session down and returns to the sign-in window.
   }
 
+  const toggleTelemetry = async (enabled) => {
+    setTelemetry(enabled)
+    const result = await window.__mareoTelemetry.set(enabled)
+    setNotice(result.ok ? '已保存' : '保存失败，请重试')
+  }
+
   return React.createElement(
     'div',
     null,
@@ -116,6 +128,21 @@ function AccountSection() {
       }),
     ),
     notice ? React.createElement('div', { style: { opacity: 0.8, marginBottom: 10 } }, notice) : null,
+    React.createElement('div', { style: fieldStyle },
+      React.createElement('label', { htmlFor: 'mareo-account-telemetry', style: { display: 'flex', gap: 8, alignItems: 'center' } },
+        React.createElement('input', {
+          id: 'mareo-account-telemetry',
+          type: 'checkbox',
+          checked: telemetry === true,
+          disabled: telemetry === null,
+          onChange: (event) => toggleTelemetry(event.target.checked),
+        }),
+        '发送匿名使用统计',
+      ),
+      React.createElement('span', { style: { opacity: 0.7, fontSize: 13, lineHeight: 1.7 } },
+        '仅包含版本、平台、启动与登录结果、异常退出，不含任何对话内容。关闭后立即停止上报。',
+      ),
+    ),
     React.createElement('div', { style: { display: 'flex', gap: 10 } },
       React.createElement('button', {
         type: 'button',

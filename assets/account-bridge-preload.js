@@ -9,3 +9,9 @@ contextBridge.exposeInMainWorld('__mareoAccount', {
   updateName: (displayName) => ipcRenderer.invoke('mareo:account:update-name', displayName),
   signOut: () => ipcRenderer.invoke('mareo:account:sign-out'),
 })
+
+// The anonymous-statistics switch lives in the same settings section.
+contextBridge.exposeInMainWorld('__mareoTelemetry', {
+  get: () => ipcRenderer.invoke('mareo:telemetry:get'),
+  set: (enabled) => ipcRenderer.invoke('mareo:telemetry:set', enabled),
+})
