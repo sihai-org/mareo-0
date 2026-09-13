@@ -52,6 +52,17 @@ export function tagArguments(version, { notes, minimumVersion }) {
   return args
 }
 
+/**
+ * Suggests the update note: the newest commit subject, unless that is the version
+ * bump itself ("Release 0.1.3"), which tells a user nothing — then the change it
+ * ships is the better suggestion.
+ */
+export function suggestNote(subjects) {
+  const [latest, previous] = subjects
+  if (latest === undefined) return ''
+  return /^Release\s+\d/.test(latest) && previous !== undefined ? previous : latest
+}
+
 export function parseArguments(argv) {
   const value = (flag) => {
     const index = argv.indexOf(flag)
@@ -108,15 +119,15 @@ async function main() {
 
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
   const currentVersion = packageJson.version
-  const lastCommit = await git('log', '-1', '--pretty=%s')
+  const recentSubjects = (await git('log', '-2', '--pretty=%s')).split('\n')
   console.log(`当前版本：${currentVersion}`)
-  console.log(`最新提交：${lastCommit}\n`)
+  console.log(`最新提交：${recentSubjects[0]}\n`)
 
   const version = options.version ?? (await ask('新版本号', recommendVersion(currentVersion)))
   if (!isValidVersion(version)) throw new Error(`版本号格式应为 x.y.z：${version}`)
   if (version === currentVersion) throw new Error(`版本号未变化（${currentVersion}）`)
 
-  const notes = options.notes ?? (await ask('更新说明（用户在升级提示里看到的一句话）', lastCommit))
+  const notes = options.notes ?? (await ask('更新说明（用户在升级提示里看到的一句话）', suggestNote(recentSubjects)))
   const minimumVersion = options.minimumVersion ?? (await ask('强制更新的最低版本（留空 = 不强制）'))
   if (minimumVersion !== '' && !isValidVersion(minimumVersion)) {
     throw new Error(`最低版本格式应为 x.y.z：${minimumVersion}`)

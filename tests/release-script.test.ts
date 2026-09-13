@@ -7,6 +7,7 @@ interface ReleaseScriptModule {
   recommendVersion: (current: string) => string
   isValidVersion: (version: string) => boolean
   isNewerVersion: (candidate: string, current: string) => boolean
+  suggestNote: (subjects: string[]) => string
   tagArguments: (version: string, options: { notes: string; minimumVersion: string }) => string[]
   parseArguments: (argv: string[]) => Record<string, unknown>
 }
@@ -20,6 +21,18 @@ test('suggests the next patch version', async () => {
   const { recommendVersion } = await releaseScript()
   assert.equal(recommendVersion('0.1.2'), '0.1.3')
   assert.equal(recommendVersion('1.9.9'), '1.9.10')
+})
+
+test('suggests a note that means something to a user', async () => {
+  const { suggestNote } = await releaseScript()
+  // A version bump says nothing; the change it ships does.
+  assert.equal(
+    suggestNote(['Release 0.1.3', 'Fix the account isolation leak']),
+    'Fix the account isolation leak',
+  )
+  assert.equal(suggestNote(['Add telemetry', 'Release 0.1.2']), 'Add telemetry')
+  assert.equal(suggestNote(['Release 0.1.3']), 'Release 0.1.3')
+  assert.equal(suggestNote([]), '')
 })
 
 test('accepts only plain x.y.z versions and orders them numerically', async () => {

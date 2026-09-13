@@ -5,7 +5,11 @@
 一条命令看全部：
 
 ```sh
-# 本地库
+# 1) 先算出下载次数（分母），从 OSS 访问日志读
+npm run downloads:oss                 # 最近 7 天，凭据取 .env.oss
+npm run downloads:oss -- --days 30
+
+# 2) 再出全部指标（本地库）
 npm run --prefix server metrics -- --downloads 137
 
 # 线上（ECS 上的容器里跑）
@@ -21,8 +25,18 @@ ssh root@114.55.15.112 'cd /srv/mareo/server/deploy && docker compose exec -T ga
 ```
 
 - 分子：客户端在**首次成功启动并登录后**上报一次 `install_confirmed`，本地用 `<userData>/.install-reported` 去重；上报失败不写标记，下次启动会重试。
-- 分母：**下载次数**，只能从外部日志取——OSS 访问日志（推荐，需在控制台开启，把日志投递到某个 bucket）或 nginx `access.log` 里 `/downloads/*` 的请求数。
+- 分母：**下载次数**，来自 OSS 访问日志——`npm run downloads:oss` 统计的是"HTTP 200 的 `GetObject` 且对象名是我们的安装包（`.dmg` / `.exe`）"，自动排除图标、清单、nupkg、目录列举与 HEAD 请求。
 - 口径提醒：这个数本质是"**装上并且登录成功过**"。装好但登录失败的用户不计入分子，因此它同时受登录可用性影响——这正是我们想要的保守口径。
+
+### OSS 访问日志
+
+- bucket `mareo-downloads` → 日志管理 → 日志转存：已开启，前缀 `oss-accesslog/`，**开启日期前缀**（后置，形如 `<SourceBucket>/YYYYMMDD/`）。
+- 因此实际对象形如 `oss-accesslog/mareo-downloads/20260913/…`；`npm run downloads:oss` 直接遍历 `oss-accesslog/` 前缀，所以布局变化不影响它。
+- **按小时投递**：某个小时的日志要等该小时结束后才写入，刚开启或近一小时没有真实下载时结果为空——这是正常的，不代表配置错误。
+- 只有真实下载才产生 `GetObject`；官网点击走 `mareo.cn/downloads/...` 的 302 也会落到这里（客户端跟随重定向到 OSS）。
+- ⚠️ **日志不要留在 `mareo-downloads`**：该 bucket 是公共读，日志对象（含访客 IP、User-Agent、请求对象名）会同样公开可读。应把日志转存到**另一个私有 bucket**（例如 `mareo-logs`，读写权限设为私有），然后：
+  - 在 `.env.oss` 里加 `OSS_LOG_BUCKET=mareo-logs`（脚本优先用它，未设置时回退到 `OSS_BUCKET`）；
+  - 给 RAM 用户补上该 bucket 的读权限。
 
 ## 2. 第一次启动是否稳定
 

@@ -152,6 +152,10 @@ jobs:
         env:
           RELEASE_NOTES: ${{ vars.RELEASE_NOTES }}
         run: |
+          # A shallow checkout points the tag ref straight at the commit, so the
+          # real tag object has to be fetched first — otherwise the annotation
+          # below would silently read the commit message instead.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           # The annotated tag carries the release metadata clients read: its first
           # line is the update note, and an optional "minimum-version:" line makes
           # older builds update before they can be used at all.
