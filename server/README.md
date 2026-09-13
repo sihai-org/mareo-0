@@ -16,10 +16,18 @@ Mareo desktop ── user token ──> Mareo gateway ── your DeepSeek key �
   row per request.
 - `GET /me` lets the desktop app validate a stored token at launch.
 - `GET /health` is a liveness probe.
+- `POST /events` stores anonymous client events (installs, launches, harness
+  exits, sign-in results). Authentication is optional: a client that cannot sign
+  in has no token, and its failures are exactly what we need to count. Anonymous
+  events are rate limited per address and never store the address.
 
 Only the SHA-256 digest of each token is stored. The database lives in a single
-SQLite file (`data/mareo.db`) with three tables: `users`, `tokens`, `usage` —
-the same shape a future Postgres/Supabase migration can adopt.
+SQLite file (`data/mareo.db`) with the tables `users`, `identities`, `tokens`,
+`usage` and `events` — the same shape a future Postgres/Supabase migration can
+adopt.
+
+`npm run metrics` prints install / launch / sign-in / harness-exit / first-task
+metrics from that database; definitions are in [`../docs/metrics.md`](../docs/metrics.md).
 
 ## Run locally
 

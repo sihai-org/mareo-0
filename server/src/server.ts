@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { generateTokenSecret, hashToken } from './auth.js'
 import { findAccountEmail, renameAccount, revokeToken, findOrCreateAccountForIdentity, findTokenOwner, storeToken, type GatewayDatabase, type TokenOwner } from './db.js'
+import { createAnonymousEventLimiter, parseEvents, recordEvents } from './events.js'
 import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from './email-auth.js'
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
@@ -12,12 +13,18 @@ export interface GatewayOptions extends ProxyConfig {
   dailyLimit: number
   /** Verification-code delivery; defaults to SMTP from the environment. */
   mailer?: Mailer
+  /** Anonymous-event rate limiter; defaults to a per-process limiter. */
+  anonymousEventLimiter?: (address: string, now?: number) => boolean
 }
 
 export function createGatewayServer(options: GatewayOptions) {
   const mailer = options.mailer ?? createEmailMailer()
+  const gatewayOptions: GatewayOptions = {
+    ...options,
+    anonymousEventLimiter: options.anonymousEventLimiter ?? createAnonymousEventLimiter(),
+  }
   return createServer((request, response) => {
-    handleRequest(options, request, response, mailer).catch((error) => {
+    handleRequest(gatewayOptions, request, response, mailer).catch((error) => {
       if (!response.headersSent) {
         sendJson(response, 500, { error: messageFrom(error) })
       } else {
@@ -37,6 +44,11 @@ async function handleRequest(
 
   if (request.method === 'GET' && pathname === '/health') {
     sendJson(response, 200, { ok: true })
+    return
+  }
+
+  if (request.method === 'POST' && pathname === '/events') {
+    await handleEvents(options, request, response)
     return
   }
 
@@ -134,6 +146,43 @@ async function handleRequest(
   }
 }
 
+/**
+ * Client events. Authentication is optional: a client that cannot sign in has no
+ * token, and those failures are exactly what we need to count. Telemetry never
+ * fails a client visibly — anything unusable is simply dropped.
+ */
+async function handleEvents(
+  options: GatewayOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const events = parseEvents(await readJsonBody(request, 64 * 1024))
+  if (events === undefined) {
+    sendJson(response, 400, { error: 'invalid-events' })
+    return
+  }
+  const owner = authenticate(request, options.db)
+  if (owner === undefined && options.anonymousEventLimiter?.(clientAddress(request)) === false) {
+    sendJson(response, 429, { error: 'too-many-events' })
+    return
+  }
+  try {
+    recordEvents(options.db, owner?.userId ?? null, events)
+  } catch {
+    // Telemetry must never surface as a client-visible failure.
+  }
+  sendJson(response, 200, { ok: true })
+}
+
+/** nginx in front of the gateway sets these; the gateway itself is loopback-only. */
+function clientAddress(request: IncomingMessage): string {
+  const real = request.headers['x-real-ip']
+  if (typeof real === 'string' && real !== '') return real
+  const forwarded = request.headers['x-forwarded-for']
+  if (typeof forwarded === 'string' && forwarded !== '') return forwarded.split(',')[0].trim()
+  return request.socket.remoteAddress ?? 'unknown'
+}
+
 async function handleEmailSend(
   options: GatewayOptions,
   request: IncomingMessage,
@@ -183,12 +232,12 @@ function displayNameForEmail(email: string): string {
   return email.split('@')[0].slice(0, 32) || 'Mareo 用户'
 }
 
-async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown> | undefined> {
+async function readJsonBody(request: IncomingMessage, maxBytes = 16 * 1024): Promise<Record<string, unknown> | undefined> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request as AsyncIterable<Buffer>) {
     size += chunk.length
-    if (size > 16 * 1024) return undefined
+    if (size > maxBytes) return undefined
     chunks.push(chunk)
   }
   try {

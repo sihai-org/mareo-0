@@ -60,9 +60,25 @@ CREATE TABLE IF NOT EXISTS auth_sends (
 
 CREATE INDEX IF NOT EXISTS idx_tokens_tokenHash ON tokens(tokenHash);
 CREATE INDEX IF NOT EXISTS idx_usage_userId_ts ON usage(userId, ts);
+
+-- Client-reported events (installs, launches, harness exits, sign-in results).
+-- Content-free by construction: a name, the client version/platform and a short
+-- opaque detail string. Anonymous rows happen when a client cannot sign in yet,
+-- which is exactly the failure we want to see.
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  accountId TEXT,
+  name TEXT NOT NULL,
+  version TEXT,
+  platform TEXT,
+  ts TEXT NOT NULL,
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_name_ts ON events(name, ts);
+CREATE INDEX IF NOT EXISTS idx_events_accountId ON events(accountId);
 `
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })

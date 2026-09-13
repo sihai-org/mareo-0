@@ -12,7 +12,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "npm run build && node --env-file-if-exists=.env dist/src/main.js",
     "issue-token": "npm run build && node --env-file-if-exists=.env dist/src/issue-token.js",
-    "test": "npm run build && node --test dist/test/"
+    "metrics": "npm run build && node --env-file-if-exists=.env dist/src/metrics.js",
+    "test": "npm run build && node --test dist/test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "26.4.1",
