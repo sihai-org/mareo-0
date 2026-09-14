@@ -44,20 +44,27 @@ export function splitLogFields(line) {
 }
 
 /**
- * OSS access logs are S3-shaped: `… Operation Key RequestUri HttpStatus ErrorCode …`.
- * Only successful GetObject lines for a release artifact count as a download;
- * everything else (listings, HEADs, 404s, log delivery itself) is ignored.
+ * Aliyun access logs are nginx-shaped with the OSS fields appended at the end:
+ *
+ *   <ip> - - [<time>] "<request>" <status> <bytes> … "<host>" … "<requester>"
+ *   "<operation>" "<bucket>" "<key>" <object-size> …
+ *
+ * so the object key sits two fields after the operation (the bucket is in
+ * between) and the status is the field right after the request. Only a
+ * successful GetObject for a release artifact counts as a download; listings,
+ * HEADs, misses and the log delivery itself are ignored.
  */
 export function parseDownloadLine(line) {
   const fields = splitLogFields(line)
   const operationIndex = fields.indexOf('GetObject')
   if (operationIndex < 0) return undefined
-  const key = fields[operationIndex + 1]
+  const key = fields[operationIndex + 2]
   if (key === undefined) return undefined
   const artifact = ARTIFACT_PATTERN.exec(key)?.[1]
   if (artifact === undefined) return undefined
-  const status = fields.slice(operationIndex + 2).find((field) => /^[1-5]\d\d$/.test(field))
-  return { artifact, status: status === undefined ? 0 : Number(status) }
+  const requestIndex = fields.findIndex((field) => /^[A-Z]+ \S+ HTTP\//.test(field))
+  const status = requestIndex < 0 ? undefined : fields[requestIndex + 1]
+  return { artifact, status: status !== undefined && /^[1-5]\d\d$/.test(status) ? Number(status) : 0 }
 }
 
 /** Installers are the denominator for the install-success rate. */

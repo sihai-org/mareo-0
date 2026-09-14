@@ -20,7 +20,10 @@ async function module_(): Promise<OssDownloadsModule> {
   return (await import(script)) as OssDownloadsModule
 }
 
-/** One OSS access-log line, in the documented S3-shaped field order. */
+/**
+ * One OSS access-log line in Aliyun's real shape: nginx-style head, then the OSS
+ * fields with "<operation>" "<bucket>" "<key>" at the end.
+ */
 function logLine({
   operation = 'GetObject',
   key,
@@ -33,28 +36,41 @@ function logLine({
   uri?: string
 }): string {
   return [
-    '"1657786863000000"',
-    '"mareo-downloads"',
-    '"13/Sep/2026:15:39:34 +0800"',
-    '"203.0.113.7"',
-    '"1657786863"',
-    '"req-abc"',
-    `"${operation}"`,
-    `"${key}"`,
+    '203.0.113.7 - - [13/Sep/2026:15:39:34 +0800]',
     `"GET /${uri ?? key} HTTP/1.1"`,
-    `"${status}"`,
+    status,
+    '216157513',
+    '120',
     '"-"',
-    '"216157513"',
-    '"216157513"',
-    '"120"',
-    '"30"',
-    '"-"',
-    '"curl/8.7.1"',
-    '"hangzhou"',
+    '"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"',
+    '"mareo-downloads.oss-cn-hangzhou.aliyuncs.com"',
+    '"6AA65507B46F7C37345E7179"',
     '"true"',
     '"-"',
+    `"${operation}"`,
+    '"mareo-downloads"',
+    `"${key}"`,
+    '216157513',
+    '13',
+    '"-"',
+    '119',
+    '"1487251194223355"',
+    '-',
+    '"-"',
+    '"standard"',
   ].join(' ')
 }
+
+test('parses a real captured access-log line', async () => {
+  const { parseDownloadLine } = await module_()
+  // Verbatim from the bucket's log objects (the request that verified logging).
+  const captured =
+    '58.19.7.52 - - [13/Sep/2026:15:47:19 +0800] "GET /app-icon.ico HTTP/1.1" 200 370070 15 "-" "curl/8.7.1" "mareo-downloads.oss-cn-hangzhou.aliyuncs.com" "6AA65507B46F7C37345E7179" "true" "-" "GetObject" "mareo-downloads" "app-icon.ico" 370070 13 "-" 119 "1487251194223355" - "-" "standard" "-" "-" "-" "-"'
+  assert.deepEqual(parseDownloadLine(captured), { artifact: 'app-icon.ico', status: 200 })
+
+  const bucketOnly = captured.replace('"GetObject" "mareo-downloads" "app-icon.ico"', '"GetBucketInfo" "mareo-downloads" "-"')
+  assert.equal(parseDownloadLine(bucketOnly), undefined)
+})
 
 test('splits quoted fields and drops the quotes', async () => {
   const { splitLogFields } = await module_()
