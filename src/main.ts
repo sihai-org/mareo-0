@@ -15,7 +15,13 @@ import {
 import { prepareAccountHome } from './account-home.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
-import { fetchLatestRelease, isNewerVersion, isUpdateRequired, selectDownloadUrl } from './update-check.js'
+import {
+  fetchLatestRelease,
+  isNewerVersion,
+  isUpdateRequired,
+  selectDownloadUrl,
+  updatePromptCopy,
+} from './update-check.js'
 import { claimUpdatePrompt } from './update-prompt.js'
 import { loadPreferences, savePreferences, type Preferences } from './preferences.js'
 import { stripLocalPaths, Telemetry, type TelemetryEvent } from './telemetry.js'
@@ -441,15 +447,24 @@ function localDateStamp(): string {
   return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
 }
 
-/** Checks the release manifest once per launch, without blocking startup. */
-function scheduleUpdateCheck(): void {
+/**
+ * Re-checks the manifest every few hours: users keep the app open for days, and
+ * a release published meanwhile has to be noticed without a restart. The prompt
+ * itself is claimed at most once a day, so re-checking cannot turn into nagging.
+ */
+const UPDATE_CHECK_INTERVAL_MS = 6 * 3600 * 1000
+let updatePromptOpen = false
+
+function scheduleUpdateCheck(delayMs = 10_000): void {
   if (!app.isPackaged || process.env.MAREO_UPDATE_CHECK === 'off') return
   setTimeout(() => {
-    void notifyIfUpdateAvailable()
-  }, 10_000)
+    void notifyIfUpdateAvailable().finally(() => scheduleUpdateCheck(UPDATE_CHECK_INTERVAL_MS))
+  }, delayMs)
 }
 
 async function notifyIfUpdateAvailable(): Promise<void> {
+  // A prompt the user has not answered yet must not be replaced by a second one.
+  if (updatePromptOpen) return
   const manifest = await fetchLatestRelease(UPDATE_MANIFEST_URL)
   if (manifest === undefined || !isNewerVersion(manifest.version, app.getVersion())) return
   const downloadUrl = selectDownloadUrl(manifest)
@@ -459,16 +474,18 @@ async function notifyIfUpdateAvailable(): Promise<void> {
 
   const options = {
     type: 'info' as const,
-    title: `Mareo ${manifest.version} 已发布`,
-    message: `你正在使用 ${app.getVersion()}，建议更新到 ${manifest.version}。`,
-    detail: manifest.notes ?? '新版本包含功能改进与问题修复。',
-    buttons: ['前往下载', '明天再提醒'],
+    ...updatePromptCopy(manifest, app.getVersion()),
     defaultId: 0,
     cancelId: 1,
   }
   const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
-  if (response === 0) void shell.openExternal(downloadUrl)
+  updatePromptOpen = true
+  try {
+    const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+    if (response === 0) void shell.openExternal(downloadUrl)
+  } finally {
+    updatePromptOpen = false
+  }
 }
 
 function registerAccountBridge(): void {

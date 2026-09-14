@@ -7,6 +7,7 @@ import {
   isUpdateRequired,
   parseReleaseManifest,
   selectDownloadUrl,
+  updatePromptCopy,
 } from '../src/update-check.js'
 
 test('orders release versions and their prereleases', () => {
@@ -44,6 +45,23 @@ test('parses a well-formed manifest and rejects junk', () => {
   assert.equal(parseReleaseManifest({ downloads: {} }), undefined)
   // A minimum that is not a version is ignored rather than trusted.
   assert.deepEqual(parseReleaseManifest({ version: '0.1.1', minimumVersion: 'latest' }), { version: '0.1.1' })
+})
+
+test('the prompt copy matches whether the update is optional or required', () => {
+  const optional = updatePromptCopy({ version: '0.1.4', notes: '修复账户隔离问题' }, '0.1.3')
+  assert.equal(optional.title, 'Mareo 0.1.4 已发布')
+  assert.match(optional.message, /正在使用 0\.1\.3/)
+  assert.equal(optional.detail, '修复账户隔离问题')
+  assert.deepEqual(optional.buttons, ['前往下载', '明天再提醒'])
+
+  const required = updatePromptCopy({ version: '0.2.0', minimumVersion: '0.2.0', notes: '必须更新' }, '0.1.3')
+  assert.match(required.title, /必须更新/)
+  assert.match(required.detail, /下次启动前必须完成更新/)
+  assert.deepEqual(required.buttons, ['立即更新', '稍后'])
+
+  // A release without notes still gets a usable line.
+  assert.match(updatePromptCopy({ version: '0.1.4' }, '0.1.3').detail, /功能改进/)
+  assert.match(updatePromptCopy({ version: '0.2.0', minimumVersion: '0.2.0' }, '0.1.3').detail, /重要修复/)
 })
 
 test('a release blocks builds below its minimum version', () => {

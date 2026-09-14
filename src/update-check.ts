@@ -47,6 +47,35 @@ export function isUpdateRequired(manifest: ReleaseManifest, currentVersion: stri
   return manifest.minimumVersion !== undefined && isNewerVersion(manifest.minimumVersion, currentVersion)
 }
 
+export interface UpdatePromptCopy {
+  title: string
+  message: string
+  detail: string
+  buttons: string[]
+}
+
+/**
+ * Wording for the update prompt. When a release declares a minimum version, the
+ * running build is already refused at startup — the prompt says so, even though
+ * the session the user is in keeps working.
+ */
+export function updatePromptCopy(manifest: ReleaseManifest, currentVersion: string): UpdatePromptCopy {
+  if (isUpdateRequired(manifest, currentVersion)) {
+    return {
+      title: `Mareo ${manifest.version} 必须更新`,
+      message: `当前版本 ${currentVersion} 已不受支持，请更新到 ${manifest.version}。`,
+      detail: `${manifest.notes ?? '新版本包含重要修复。'}\n\n可以先用完手头的事，但下次启动前必须完成更新。`,
+      buttons: ['立即更新', '稍后'],
+    }
+  }
+  return {
+    title: `Mareo ${manifest.version} 已发布`,
+    message: `你正在使用 ${currentVersion}，建议更新到 ${manifest.version}。`,
+    detail: manifest.notes ?? '新版本包含功能改进与问题修复。',
+    buttons: ['前往下载', '明天再提醒'],
+  }
+}
+
 export function parseReleaseManifest(raw: unknown): ReleaseManifest | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined
   const record = raw as Record<string, unknown>
