@@ -149,7 +149,12 @@ test('enforces the per-user daily limit', async () => {
     })
   try {
     assert.equal((await callChat()).status, 200)
-    assert.equal((await callChat()).status, 429)
+    const rejected = await callChat()
+    assert.equal(rejected.status, 429)
+    // The client shows this to the user, so it must be a sentence, not a code.
+    const body = (await rejected.json()) as { error: string; message?: string }
+    assert.equal(body.error, 'daily-limit-reached')
+    assert.match(body.message ?? '', /明天|0 点|额度/)
   } finally {
     await close(limited)
     limitedDb.close()

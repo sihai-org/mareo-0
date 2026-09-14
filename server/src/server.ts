@@ -13,6 +13,12 @@ export interface GatewayOptions extends ProxyConfig {
   db: GatewayDatabase
   /** Per-user daily request cap; 0 disables the check. */
   dailyLimit: number
+  /**
+   * Requests in one day above which an account deserves a look. This only warns
+   * (log line + the operations page); it never blocks, which is what keeps the
+   * hard cap a runaway guard rather than a product quota. 0 disables it.
+   */
+  dailyWarnLimit?: number
   /** Verification-code delivery; defaults to SMTP from the environment. */
   mailer?: Mailer
   /** Anonymous-event rate limiter; defaults to a per-process limiter. */
@@ -130,10 +136,14 @@ async function handleRequest(
     return
   }
 
-  if (
-    options.dailyLimit > 0 &&
-    countRequestsSince(options.db, owner.userId, startOfDay()) >= options.dailyLimit
-  ) {
+  const usedToday = countRequestsSince(options.db, owner.userId, startOfDay())
+  if (options.dailyWarnLimit !== undefined && options.dailyWarnLimit > 0 && usedToday === options.dailyWarnLimit) {
+    // Exactly on the crossing, so this warns once per account per day instead of
+    // on every request past the line.
+    console.warn(`[usage] ${owner.userId} reached ${options.dailyWarnLimit} requests today`)
+  }
+
+  if (options.dailyLimit > 0 && usedToday >= options.dailyLimit) {
     try {
       // A rejected request is recorded too: without it the cap is invisible in
       // the metrics, and hitting the cap is exactly what we need to see.
@@ -148,7 +158,12 @@ async function handleRequest(
     } catch {
       // Recording the rejection must not change the rejection itself.
     }
-    sendJson(response, 429, { error: 'daily request limit reached' })
+    // The client shows this text to the user, so it says what happened and when
+    // it resets, in the language they are using.
+    sendJson(response, 429, {
+      error: 'daily-limit-reached',
+      message: `今天的用量额度已用完，北京时间 0 点后自动恢复。如需提高额度请联系我们。`,
+    })
     return
   }
 

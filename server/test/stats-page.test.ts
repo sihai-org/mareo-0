@@ -29,6 +29,9 @@ test('the page reports aggregates and escapes anything a client controls', () =>
   assert.match(page, /额度用尽的请求/)
   assert.match(page, /2026-09-14T12:00:00.000Z/)
   assert.match(page, /安装包下载（近 7 天）/)
+  assert.match(page, /今日新增 0/)                        // deltas are always shown
+  assert.match(page, /累计账号/)
+  assert.match(page, /用量异常（今日超过 500 次的账户）/)
   // No external requests: the page works offline and leaks nothing by loading.
   assert.equal(/<script|src="http|href="http/.test(page), false)
 

@@ -25,6 +25,8 @@ function escapeHtml(value: string): string {
 
 export interface Metrics {
   installs: number
+  installsToday: number
+  accountsToday: number
   activeToday: number
   activeWeek: number
   launchesWeek: { total: number; ok: number }
@@ -33,6 +35,8 @@ export interface Metrics {
   requestsWeek: number
   okWeek: number
   limitedWeek: number
+  /** Accounts above the attention threshold today, with their request counts. */
+  heavyToday: { accountId: string; requests: number }[]
   latency: { p50: number; p95: number } | undefined
   charsWeek: number
   firstTryOk: number
@@ -44,7 +48,7 @@ export interface Metrics {
   siteWeek: { total: number; byPath: { path: string; count: number }[] }
 }
 
-export function collect(db: GatewayDatabase, now = new Date()): Metrics {
+export function collect(db: GatewayDatabase, now = new Date(), heavyLimit = 500): Metrics {
   // Every window is a Beijing calendar day: today for "今日", today plus the
   // previous six days for "近 7 天".
   const day = dayStamp(now)
@@ -68,6 +72,12 @@ export function collect(db: GatewayDatabase, now = new Date()): Metrics {
     installs: one<{ n: number }>(
       "SELECT count(DISTINCT accountId) n FROM events WHERE name = 'install_confirmed' AND accountId IS NOT NULL",
     ).n,
+    installsToday: one<{ n: number }>(
+      `SELECT count(DISTINCT accountId) n FROM events
+       WHERE name = 'install_confirmed' AND accountId IS NOT NULL AND ts >= ?`,
+      isoDay,
+    ).n,
+    accountsToday: one<{ n: number }>('SELECT count(*) n FROM users WHERE createdAt >= ?', day).n,
     activeToday: one<{ n: number }>(
       "SELECT count(DISTINCT accountId) n FROM events WHERE name = 'launch' AND accountId IS NOT NULL AND ts >= ?",
       isoDay,
@@ -93,6 +103,11 @@ export function collect(db: GatewayDatabase, now = new Date()): Metrics {
     requestsWeek: usageWeek.total,
     okWeek: usageWeek.ok ?? 0,
     limitedWeek: one<{ n: number }>('SELECT count(*) n FROM usage WHERE status = 429 AND ts >= ?', week).n,
+    heavyToday: all<{ userId: string; n: number }>(
+      'SELECT userId, count(*) n FROM usage WHERE ts >= ? GROUP BY userId HAVING n >= ? ORDER BY n DESC',
+      isoDay,
+      heavyLimit,
+    ).map((row) => ({ accountId: row.userId, requests: row.n })),
     latency: latencyRows.length === 0 ? undefined : { p50: at(0.5), p95: at(0.95) },
     charsWeek: one<{ n: number | null }>(
       'SELECT sum(promptChars + completionChars) n FROM usage WHERE ts >= ?',
@@ -187,7 +202,8 @@ footer a { color: inherit; }
   <p class="meta">页面生成于 ${escapeHtml(options.generatedAt.toISOString())}（UTC）· 所有数字均为聚合值，不含任何账号信息</p>
 
   <div class="cards">
-    ${card('累计安装', String(metrics.installs), '首次成功启动的设备数')}
+    ${card('累计安装', String(metrics.installs), `今日新增 ${metrics.installsToday}`)}
+    ${card('累计账号', String(metrics.accounts), `今日新增 ${metrics.accountsToday}`)}
     ${card('近 7 天活跃', String(metrics.activeWeek), `今日 ${metrics.activeToday}`)}
     ${card('近 7 天模型请求', String(metrics.requestsWeek), `成功 ${modelRate}`)}
     ${card('官网浏览（近 7 天）', String(siteWeek.total), '仅统计执行 JS 的真实浏览器')}
@@ -198,8 +214,8 @@ footer a { color: inherit; }
   <table>${rows([
     ['官网浏览（近 7 天）', String(siteWeek.total)],
     ['安装包下载（近 7 天）', options.downloads === undefined ? '未统计' : String(options.downloads)],
-    ['累计安装（成功启动并登录）', String(metrics.installs)],
-    ['注册账号总数', String(metrics.accounts)],
+    ['累计安装（成功启动并登录）', `${metrics.installs}（今日新增 ${metrics.installsToday}）`],
+    ['注册账号总数', `${metrics.accounts}（今日新增 ${metrics.accountsToday}）`],
     ['用上模型的账号', `${metrics.accountsWithUsage}`],
     ['首次调用即成功的账号', `${metrics.firstTryOk} / ${metrics.accountsWithUsage}`],
   ])}</table>
@@ -211,6 +227,9 @@ footer a { color: inherit; }
     ['模型调用成功率（近 7 天）', `${modelRate}（成功 ${metrics.okWeek}）`],
     ['成功率延迟（近 7 天）', metrics.latency === undefined ? '—' : `p50 ${metrics.latency.p50}ms · p95 ${metrics.latency.p95}ms`],
     ['额度用尽的请求（近 7 天）', `${metrics.limitedWeek} 次`],
+    ['用量异常（今日超过 500 次的账户）', metrics.heavyToday.length === 0
+      ? '无'
+      : metrics.heavyToday.map((row) => `${row.accountId.slice(0, 8)} ${row.requests} 次`).join(' · ')],
     ['登录结果（近 7 天）', metrics.signinWeek.length === 0 ? '暂无数据' : metrics.signinWeek.map((row) => `${row.result} ${row.n}`).join(' · ')],
   ])}</table>
 
