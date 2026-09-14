@@ -20,6 +20,7 @@
     "generate:ico": "node scripts/generate-ico.mjs",
     "publish:oss": "node scripts/publish-oss.mjs",
     "downloads:oss": "node --env-file-if-exists=.env.oss scripts/oss-downloads.mjs",
+    "deploy:site": "node scripts/deploy-site.mjs",
     "verify:package": "node scripts/verify-runtime.mjs out/Mareo-darwin-arm64/Mareo.app/Contents/Resources",
     "release": "node scripts/release.mjs",
     "server:start": "npm --prefix server run start",
