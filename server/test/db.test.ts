@@ -5,7 +5,8 @@ import path from 'node:path'
 import test from 'node:test'
 import { createTokenAccount, findAccountByIdentity, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
 import { hashToken } from '../src/auth.js'
-import { countRequestsSince, recordUsage, startOfUtcDay } from '../src/usage.js'
+import { startOfDay } from '../src/clock.js'
+import { countRequestsSince, recordUsage } from '../src/usage.js'
 
 let directory: string
 let dbPath: string
@@ -33,7 +34,7 @@ test('issues a token that resolves to its owner and rejects unknown hashes', () 
 
 test('records usage and counts requests since a timestamp', () => {
   const userId = createTokenAccount(db, 'Grace')
-  const before = startOfUtcDay()
+  const before = startOfDay()
   recordUsage(db, { userId, model: 'deepseek-chat', promptChars: 10, completionChars: 20, status: 200, latencyMs: 5 })
   recordUsage(db, { userId, model: 'deepseek-reasoner', promptChars: 3, completionChars: 7, status: 429, latencyMs: 1 })
 

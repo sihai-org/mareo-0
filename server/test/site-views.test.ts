@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import { createTokenAccount, openDatabase, type GatewayDatabase } from '../src/db.js'
-import { countRequestsSince, recordUsage, startOfUtcDay } from '../src/usage.js'
-import { dayStamp, parseSiteView, recordSiteView, siteViewsSince } from '../src/site-views.js'
+import { startOfDay } from '../src/clock.js'
+import { countRequestsSince, recordUsage } from '../src/usage.js'
+import { dayStamp } from '../src/clock.js'
+import { parseSiteView, recordSiteView, siteViewsSince } from '../src/site-views.js'
 
 let directory: string
 let db: GatewayDatabase
@@ -54,9 +56,9 @@ test('views accumulate per day and per path, without storing a visitor', () => {
 
 test('a rejected request is recorded so the cap is visible', () => {
   const userId = createTokenAccount(db, '额度测试')
-  const before = countRequestsSince(db, userId, startOfUtcDay())
+  const before = countRequestsSince(db, userId, startOfDay())
   recordUsage(db, { userId, model: null, promptChars: 0, completionChars: 0, status: 429, latencyMs: 0 })
-  assert.equal(countRequestsSince(db, userId, startOfUtcDay()), before + 1)
+  assert.equal(countRequestsSince(db, userId, startOfDay()), before + 1)
   const limited = db.prepare('SELECT count(*) n FROM usage WHERE status = 429').get() as { n: number }
   assert.equal(limited.n, 1)
 })

@@ -8,7 +8,8 @@
 // per-account value: every number here is an aggregate. Definitions live in
 // docs/operations.md.
 import { openDatabase, type GatewayDatabase } from './db.js'
-import { dayStamp, siteViewsSince } from './site-views.js'
+import { dayStamp, dayStampDaysAgo, startOfDay, startOfDayDaysAgo } from './clock.js'
+import { siteViewsSince } from './site-views.js'
 
 const dbPath = process.env.DB_PATH ?? 'data/mareo.db'
 
@@ -20,15 +21,6 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
-}
-
-function dayBefore(days: number, now = new Date()): string {
-  const past = new Date(now.getTime() - days * 24 * 3600 * 1000)
-  return dayStamp(past)
-}
-
-function isoDayBefore(days: number, now = new Date()): string {
-  return new Date(now.getTime() - days * 24 * 3600 * 1000).toISOString()
 }
 
 export interface Metrics {
@@ -53,9 +45,11 @@ export interface Metrics {
 }
 
 export function collect(db: GatewayDatabase, now = new Date()): Metrics {
+  // Every window is a Beijing calendar day: today for "今日", today plus the
+  // previous six days for "近 7 天".
   const day = dayStamp(now)
-  const isoDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-  const week = isoDayBefore(7, now)
+  const isoDay = startOfDay(now)
+  const week = startOfDayDaysAgo(6, now)
   const one = <T>(sql: string, ...params: (string | number)[]): T => db.prepare(sql).get(...params) as T
   const all = <T>(sql: string, ...params: (string | number)[]): T[] => db.prepare(sql).all(...params) as T[]
 
@@ -125,7 +119,7 @@ export function collect(db: GatewayDatabase, now = new Date()): Metrics {
       `SELECT platform, count(*) n FROM events WHERE name = 'launch' AND ts >= ? GROUP BY platform ORDER BY n DESC`,
       week,
     ).map((row) => ({ platform: row.platform ?? '未知', n: row.n })),
-    siteWeek: siteViewsSince(db, dayBefore(7, now)),
+    siteWeek: siteViewsSince(db, dayStampDaysAgo(6, now)),
   }
 }
 

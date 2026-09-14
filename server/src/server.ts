@@ -6,7 +6,8 @@ import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from '.
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
 import { parseSiteView, recordSiteView } from './site-views.js'
-import { countRequestsSince, recordUsage, startOfUtcDay } from './usage.js'
+import { startOfDay } from './clock.js'
+import { countRequestsSince, recordUsage } from './usage.js'
 
 export interface GatewayOptions extends ProxyConfig {
   db: GatewayDatabase
@@ -131,7 +132,7 @@ async function handleRequest(
 
   if (
     options.dailyLimit > 0 &&
-    countRequestsSince(options.db, owner.userId, startOfUtcDay()) >= options.dailyLimit
+    countRequestsSince(options.db, owner.userId, startOfDay()) >= options.dailyLimit
   ) {
     try {
       // A rejected request is recorded too: without it the cap is invisible in

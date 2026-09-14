@@ -30,8 +30,3 @@ export function countRequestsSince(db: GatewayDatabase, userId: string, sinceIso
     .get(userId, sinceIso) as { n: number }
   return row.n
 }
-
-/** ISO timestamp of the start of the current UTC day. */
-export function startOfUtcDay(now = new Date()): string {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-}

@@ -7,7 +7,8 @@ import { after, before, test } from 'node:test'
 import { hashToken } from '../src/auth.js'
 import { createTokenAccount, findTokenOwner, openDatabase, storeToken, type GatewayDatabase } from '../src/db.js'
 import { createGatewayServer } from '../src/server.js'
-import { countRequestsSince, startOfUtcDay } from '../src/usage.js'
+import { startOfDay } from '../src/clock.js'
+import { countRequestsSince } from '../src/usage.js'
 
 const UPSTREAM_KEY = 'sk-gateway-own-key'
 
@@ -117,7 +118,7 @@ test('proxies a chat completion and records usage with the owner and model', asy
 
   const userId = findTokenOwner(db, hashToken(token))?.userId
   assert.ok(userId !== undefined)
-  assert.equal(countRequestsSince(db, userId, startOfUtcDay()), 1)
+  assert.equal(countRequestsSince(db, userId, startOfDay()), 1)
 })
 
 test('streams event-stream responses through', async () => {

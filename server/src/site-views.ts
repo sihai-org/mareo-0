@@ -1,3 +1,4 @@
+import { dayStamp } from './clock.js'
 import type { GatewayDatabase } from './db.js'
 
 /**
@@ -14,11 +15,6 @@ export function parseSiteView(payload: unknown): { path: string } | undefined {
   const path = raw.split('?')[0].split('#')[0]
   const normalised = path === '/index.html' || path === '' ? '/' : path
   return (COUNTED_PATHS as readonly string[]).includes(normalised) ? { path: normalised } : undefined
-}
-
-/** Local calendar day, in the operator's timezone (the server runs in CST). */
-export function dayStamp(now = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
 export function recordSiteView(db: GatewayDatabase, path: string, now = new Date()): void {
