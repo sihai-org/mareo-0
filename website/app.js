@@ -9,12 +9,12 @@ const MANIFEST_URL = 'updates/latest.json';
 
 const pageText = {
   'zh-CN': {
-    title: 'Mareo — 让 AI 走进你的工作区',
-    description: 'Mareo，让 AI 走进你的工作区。基于 DeepSeek Harness 构建的桌面 AI Agent，适用于 macOS 与 Windows。',
+    title: 'Mareo — 免费的 AI 工作助手',
+    description: 'Mareo，免费的 AI 工作助手。能写代码、写文章、做表格和 PPT，处理本地文件并完成复杂任务。下载 Windows 或 macOS 版，登录即可开始。',
   },
   en: {
-    title: 'Mareo — AI for your workspace',
-    description: 'Bring AI into your workspace with Mareo, an independent desktop AI agent built on DeepSeek Harness for macOS and Windows.',
+    title: 'Mareo — Your free AI work assistant',
+    description: 'Write code, create content, make spreadsheets and slides with Mareo, an independent desktop AI agent. Download for Windows or macOS and sign in to get started.',
   },
 };
 const languageButtons = document.querySelectorAll('[data-language]');
@@ -57,13 +57,11 @@ async function applyDownloads() {
   } catch { /* Manifest unavailable: keep the fallback links. */ }
 
   for (const [platform, url] of Object.entries(downloads)) {
-    if (!url) continue;
-    const link = document.getElementById(`download-link${platform === 'macos' ? '' : '-' + platform}`);
-    const pending = document.getElementById(`download-pending${platform === 'macos' ? '' : '-' + platform}`);
-    if (!link) continue;
-    link.href = url;
-    link.hidden = false;
-    if (pending) pending.hidden = true;
+    for (const link of document.querySelectorAll(`[data-download="${platform}"]`)) {
+      if (url) link.href = url;
+      link.hidden = !url;
+    }
+    for (const pending of document.querySelectorAll(`[data-pending="${platform}"]`)) pending.hidden = Boolean(url);
   }
 
   const versionLabel = document.getElementById('download-version');

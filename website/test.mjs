@@ -20,10 +20,19 @@ async function openPage({ saved, storageBlocked = false, manifest, offline = fal
   const meta = {}, languageGroup = { hidden: true };
   const links = { 'download-link': { hidden: true }, 'download-link-windows': { hidden: true } };
   const pendings = { 'download-pending': { hidden: false }, 'download-pending-windows': { hidden: false } };
+  const heroLinks = { macos: { hidden: true }, windows: { hidden: true } };
+  const heroPendings = { macos: { hidden: true }, windows: { hidden: true } };
   const version = { textContent: '' };
   const document = {
     documentElement: { lang: 'zh-CN' },
-    querySelectorAll: () => buttons,
+    querySelectorAll: selector => {
+      if (selector === '[data-language]') return buttons;
+      const [, kind, platform] = selector.match(/\[data-(download|pending)="(macos|windows)"\]/);
+      const suffix = platform === 'macos' ? '' : '-windows';
+      return kind === 'download'
+        ? [heroLinks[platform], links[`download-link${suffix}`]]
+        : [heroPendings[platform], pendings[`download-pending${suffix}`]];
+    },
     querySelector: selector => (selector === '.languages' ? languageGroup : meta),
     getElementById: id => links[id] ?? pendings[id] ?? (id === 'download-version' ? version : null),
   };
@@ -41,7 +50,7 @@ async function openPage({ saved, storageBlocked = false, manifest, offline = fal
   });
   // applyDownloads resolves asynchronously once the manifest has been read.
   await new Promise(resolve => setTimeout(resolve, 0));
-  return { document, buttons, meta, storage, languageGroup, links, pendings, version };
+  return { document, buttons, meta, storage, languageGroup, links, pendings, version, heroLinks, heroPendings };
 }
 
 test('Chinese default, accessible language toggle and remembered English', async () => {
@@ -50,7 +59,7 @@ test('Chinese default, accessible language toggle and remembered English', async
   assert.equal(page.languageGroup.hidden, false);
   page.buttons[1].click();
   assert.equal(page.document.documentElement.lang, 'en');
-  assert.match(page.document.title, /AI for your workspace/);
+  assert.match(page.document.title, /free AI work assistant/);
   assert.match(page.meta.content, /independent desktop/);
   assert.equal(page.buttons[1].attributes['aria-pressed'], 'true');
   assert.equal(page.buttons[0].attributes['aria-pressed'], 'false');
@@ -89,6 +98,8 @@ test('Downloads follow the published manifest per platform', async () => {
   assert.equal(page.pendings['download-pending'].hidden, true);
   assert.equal(page.pendings['download-pending-windows'].hidden, true);
   assert.equal(page.version.textContent, 'v0.1.1');
+  assert.deepEqual(page.heroLinks.macos, page.links['download-link']);
+  assert.deepEqual(page.heroLinks.windows, page.links['download-link-windows']);
 });
 
 test('A platform without a manifest entry keeps its coming-soon note', async () => {
@@ -98,6 +109,8 @@ test('A platform without a manifest entry keeps its coming-soon note', async () 
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, true);
   assert.equal(page.pendings['download-pending-windows'].hidden, false);
+  assert.equal(page.heroLinks.windows.hidden, true);
+  assert.equal(page.heroPendings.windows.hidden, false);
 });
 
 test('An unreachable manifest falls back to the built-in links', async () => {
@@ -107,6 +120,17 @@ test('An unreachable manifest falls back to the built-in links', async () => {
   assert.equal(page.links['download-link-windows'].href, fallback.windows);
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, false);
+  assert.deepEqual(page.heroLinks.macos, page.links['download-link']);
+  assert.deepEqual(page.heroLinks.windows, page.links['download-link-windows']);
+});
+
+test('Hero includes both platform downloads, core promise and the real screenshot', () => {
+  const hero = html.split('<section class="hero wrap"')[1].split('</section>')[0];
+  assert.match(hero, /data-download="macos"/);
+  assert.match(hero, /data-download="windows"/);
+  assert.match(hero, /免费的/);
+  assert.match(hero, /能做表格和 PPT/);
+  assert.match(hero, /assets\/mareo-workspace.png/);
 });
 
 test('Static assets and fragment links resolve within the standalone directory', () => {

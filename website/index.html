@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Mareo，让 AI 走进你的工作区。基于 DeepSeek Harness 构建的桌面 AI Agent，适用于 macOS Apple Silicon。">
+  <meta name="description" content="Mareo，免费的 AI 工作助手。能写代码、写文章、做表格和 PPT，处理本地文件并完成复杂任务。下载 Windows 或 macOS 版，登录即可开始。">
   <meta name="theme-color" content="#fafbff">
-  <title>Mareo — 让 AI 走进你的工作区</title>
+  <title>Mareo — 免费的 AI 工作助手</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
-  <link rel="stylesheet" href="styles.css">
-  <script src="app.js?v=0.1.1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20260914">
+  <script src="app.js?v=20260914" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main"><span lang="zh-CN">跳转到内容</span><span lang="en">Skip to content</span></a>
@@ -27,48 +27,65 @@
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> YOUR DESKTOP. NEW POSSIBILITIES.</p>
-        <h1 id="hero-title"><span lang="zh-CN">让 AI 走进<br>你的<span class="accent">工作区。</span></span><span lang="en">Your workspace.<br><span class="accent">A new possibility.</span></span></h1>
-        <p class="intro"><span lang="zh-CN">不止于一场对话。Mareo 将 DeepSeek Harness 带到桌面，让你围绕文件、项目和想法，与 AI 一起推进工作。</span><span lang="en">More than a conversation. Mareo brings DeepSeek Harness to your desktop, so you can work with AI around your files, projects, and ideas.</span></p>
-        <a class="button primary" href="#download"><span lang="zh-CN">获取 Mareo</span><span lang="en">Get Mareo</span><span aria-hidden="true">↗</span></a>
-        <p class="platform">macOS · Apple Silicon <span class="separator">/</span> <span lang="zh-CN">桌面 AI Agent</span><span lang="en">Desktop AI agent</span></p>
+        <p class="eyebrow"><span class="status-dot"></span> MAREO · YOUR DESKTOP AI AGENT</p>
+        <h1 id="hero-title"><span lang="zh-CN">免费的<br><span class="accent">AI 工作助手</span></span><span lang="en">Your free<br><span class="accent">AI work assistant.</span></span></h1>
+        <p class="hero-promise"><span lang="zh-CN">能写代码，能写文章，<br>能做表格和 PPT。</span><span lang="en">Write code. Create content.<br>Make spreadsheets and slides.</span></p>
+        <p class="intro"><span lang="zh-CN">读取你的项目和文件，调用工具、运行命令，一步一步完成真实任务。</span><span lang="en">Read your projects and files, use tools, and run commands. Get real tasks done, step by step.</span></p>
+        <div class="hero-downloads">
+          <div><a data-download="windows" class="button primary" hidden><span lang="zh-CN">下载 Windows 版</span><span lang="en">Download for Windows</span><span aria-hidden="true">↓</span></a><p data-pending="windows" hidden><span lang="zh-CN">Windows 下载即将开放</span><span lang="en">Windows download coming soon</span></p><small>Windows 10 / 11 · x64</small></div>
+          <div><a data-download="macos" class="button secondary" hidden><span lang="zh-CN">下载 Mac 版</span><span lang="en">Download for Mac</span><span aria-hidden="true">↓</span></a><p data-pending="macos" hidden><span lang="zh-CN">Mac 下载即将开放</span><span lang="en">Mac download coming soon</span></p><small>macOS · Apple Silicon</small></div>
+        </div>
+        <p class="platform"><span lang="zh-CN">当前免费使用 · 无需自行配置 API Key</span><span lang="en">Free to use today · No API key to configure</span></p>
+        <noscript><p class="platform">请启用 JavaScript 获取最新下载链接。 / Enable JavaScript for the latest downloads.</p></noscript>
       </div>
-      <div class="hero-art" aria-hidden="true">
-        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-        <img src="assets/logo.png" width="400" height="400" alt="" fetchpriority="high">
-        <span class="art-caption">A LITTLE CURIOSITY.<br>A WHOLE NEW START.</span>
+      <div class="hero-preview">
+        <img src="assets/mareo-workspace.png" width="2940" height="1846" alt="Mareo 桌面工作区 / Mareo desktop workspace" fetchpriority="high">
+        <p><span lang="zh-CN">你的文件、项目和下一步行动，在同一个工作区。</span><span lang="en">Your files, projects, and next steps. One workspace.</span></p>
       </div>
     </section>
 
-    <div class="foundation wrap"><span lang="zh-CN">熟悉的 Harness 体验，更简单的开始。</span><span lang="en">The Harness experience. A simpler way in.</span><a href="https://github.com/deepseek-ai/deepseek-harness">Built on DeepSeek Harness <span aria-hidden="true">↗</span></a></div>
+    <div class="foundation wrap"><span lang="zh-CN">运行在你电脑上的 AI Agent，为真实工作而来。</span><span lang="en">An AI agent on your desktop, made for real work.</span><a href="https://github.com/deepseek-ai/deepseek-harness">Built on DeepSeek Harness <span aria-hidden="true">↗</span></a></div>
 
     <section id="features" class="features wrap" aria-labelledby="features-title">
-      <div class="section-heading"><p class="eyebrow">MEET MAREO</p><h2 id="features-title"><span lang="zh-CN">从一个想法，<br>到下一步行动。</span><span lang="en">From an idea<br> to your next move.</span></h2></div>
+      <div class="section-heading"><p class="eyebrow">MADE FOR YOUR WORK</p><h2 id="features-title"><span lang="zh-CN">你想做的事，<br>交给 Mareo 一起完成。</span><span lang="en">Bring your to-do list.<br>Work through it with Mareo.</span></h2></div>
       <div class="feature-list">
-        <article><span class="feature-number">01</span><div><h3><span lang="zh-CN">打开应用，开始工作</span><span lang="en">Open the app. Get to work.</span></h3><p><span lang="zh-CN">无需用命令行启动 Harness。安装 Mareo，从桌面打开，进入熟悉的对话与工作区。</span><span lang="en">No terminal command to launch Harness. Install Mareo and open it from your desktop to reach your conversations and workspaces.</span></p></div></article>
-        <article><span class="feature-number">02</span><div><h3><span lang="zh-CN">围绕你的项目展开</span><span lang="en">Keep your project in focus.</span></h3><p><span lang="zh-CN">选择本地工作区，与 AI 讨论任务、处理文件，让对话与正在进行的工作保持联系。</span><span lang="en">Choose a local workspace, discuss tasks, and work on files with AI. Keep the conversation connected to the work in front of you.</span></p></div></article>
-        <article><span class="feature-number">03</span><div><h3><span lang="zh-CN">不必管理模型 API Key</span><span lang="en">One less thing to configure.</span></h3><p><span lang="zh-CN">通过 Mareo 账号接入模型服务，不需要自行申请或填写 DeepSeek API Key。</span><span lang="en">Access the model service through your Mareo account. You don't need to obtain or enter a DeepSeek API key.</span></p></div></article>
+        <article><span class="feature-number">01</span><div><h3><span lang="zh-CN">写代码</span><span lang="en">Write code</span></h3><p><span lang="zh-CN">读取项目、理解代码、修改文件、修复 Bug，运行命令和测试。</span><span lang="en">Explore projects, understand code, edit files, fix bugs, and run commands and tests.</span></p></div></article>
+        <article><span class="feature-number">02</span><div><h3><span lang="zh-CN">写文章</span><span lang="en">Create content</span></h3><p><span lang="zh-CN">根据你的资料，撰写文章、报告、方案、说明文档和各种长文本。</span><span lang="en">Turn your source material into articles, reports, proposals, documentation, and long-form writing.</span></p></div></article>
+        <article><span class="feature-number">03</span><div><h3><span lang="zh-CN">做表格和 PPT</span><span lang="en">Make spreadsheets and slides</span></h3><p><span lang="zh-CN">清洗、统计、汇总和转换 CSV / Excel 数据，生成新表格；将资料整理为演示文稿。</span><span lang="en">Clean, analyze, summarize, and convert CSV / Excel data into new spreadsheets. Turn your material into presentations.</span></p></div></article>
+        <article><span class="feature-number">04</span><div><h3><span lang="zh-CN">整理文件</span><span lang="en">Organize files</span></h3><p><span lang="zh-CN">批量读取、分类、重命名、移动和整理本地文件，让重复工作更简单。</span><span lang="en">Read, classify, rename, move, and organize local files in batches. Make repetitive work simpler.</span></p></div></article>
+        <article><span class="feature-number">05</span><div><h3><span lang="zh-CN">查资料</span><span lang="en">Research a topic</span></h3><p><span lang="zh-CN">搜索网页、阅读资料，并结合你电脑里的内容继续完成任务。</span><span lang="en">Search the web, read sources, and combine what you find with local material to move your task forward.</span></p></div></article>
       </div>
+    </section>
+
+    <section class="task-story wrap" aria-labelledby="task-title">
+      <p class="eyebrow">BEYOND THE ANSWER</p>
+      <h2 id="task-title"><span lang="zh-CN">不止回答，<span class="accent">还能完成任务。</span></span><span lang="en">More than answers.<br><span class="accent">Work that gets done.</span></span></h2>
+      <p><span lang="zh-CN">复杂的工作，不必拆成一次次提问。Mareo 可以连续调用工具、执行命令、处理文件，再根据结果继续下一步，与你一起推进整个任务。</span><span lang="en">Complex work takes more than a single reply. Mareo can keep using tools, running commands, and working with files, then use the results to take the next step with you.</span></p>
+    </section>
+
+    <section class="start wrap" aria-labelledby="start-title">
+      <div class="section-heading"><p class="eyebrow">LESS SETUP. MORE DOING.</p><h2 id="start-title"><span lang="zh-CN">更简单的开始。</span><span lang="en">A simpler way to start.</span></h2></div>
+      <div><ul><li><span lang="zh-CN">无需安装 Node</span><span lang="en">No Node installation</span></li><li><span lang="zh-CN">无需打开命令行启动</span><span lang="en">No terminal command to launch</span></li><li><span lang="zh-CN">无需自己配置 DeepSeek Harness 或 API Key</span><span lang="en">No Harness setup or API key to manage</span></li></ul><p><span lang="zh-CN">下载安装 Mareo，登录后就能开始使用。</span><span lang="en">Download Mareo, install it, and sign in to get started.</span></p></div>
     </section>
 
     <section id="download" class="download wrap" aria-labelledby="download-title">
       <div class="download-panel">
-        <div><p class="eyebrow">A NEW START</p><h2 id="download-title"><span lang="zh-CN">下一步，<br>在你的桌面上。</span><span lang="en">Your next chapter.<br>On your desktop.</span></h2><p class="download-description"><span lang="zh-CN">为 macOS 与 Windows 而来。</span><span lang="en">For macOS and Windows.</span></p><p class="download-version" id="download-version"></p></div>
+        <div><p class="eyebrow">A NEW START</p><h2 id="download-title"><span lang="zh-CN">下一步，<br>让 Mareo 帮你。</span><span lang="en">Your next task.<br>Meet your assistant.</span></h2><p class="download-description"><span lang="zh-CN">当前免费使用。选择适合你电脑的版本。</span><span lang="en">Free to use today. Choose the version for your computer.</span></p><p class="download-version" id="download-version"></p></div>
         <div class="releases">
           <div class="release">
             <img src="assets/app-icon.png" width="88" height="88" alt="Mareo" loading="lazy">
             <h3>Mareo <span>for macOS</span></h3>
             <p>Apple Silicon · arm64</p>
-            <a id="download-link" class="button download-button" hidden><span lang="zh-CN">下载 macOS 版</span><span lang="en">Download for macOS</span><span aria-hidden="true">↓</span></a>
-            <p id="download-pending" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
+            <a data-download="macos" class="button download-button" hidden><span lang="zh-CN">下载 macOS 版</span><span lang="en">Download for macOS</span><span aria-hidden="true">↓</span></a>
+            <p data-pending="macos" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
             <p class="release-note"><span lang="zh-CN">面向搭载 Apple 芯片的 Mac。</span><span lang="en">For Mac computers with Apple silicon.</span></p>
           </div>
           <div class="release">
             <img src="assets/app-icon.png" width="88" height="88" alt="Mareo" loading="lazy">
             <h3>Mareo <span>for Windows</span></h3>
             <p>Windows 10 / 11 · x64</p>
-            <a id="download-link-windows" class="button download-button" hidden><span lang="zh-CN">下载 Windows 版</span><span lang="en">Download for Windows</span><span aria-hidden="true">↓</span></a>
-            <p id="download-pending-windows" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
+            <a data-download="windows" class="button download-button" hidden><span lang="zh-CN">下载 Windows 版</span><span lang="en">Download for Windows</span><span aria-hidden="true">↓</span></a>
+            <p data-pending="windows" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
             <p class="release-note"><span lang="zh-CN">面向 64 位 Windows 10 / 11。</span><span lang="en">For 64-bit Windows 10 / 11.</span></p>
           </div>
         </div>

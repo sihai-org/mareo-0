@@ -108,11 +108,11 @@ a:hover {
 }
 .hero {
   display:grid;
-  grid-template-columns:1.15fr 1fr;
+  grid-template-columns:1fr 1.12fr;
   align-items:center;
   min-height:610px;
-  padding-block:64px 80px;
-  gap:24px
+  padding-block:38px 60px;
+  gap:40px
 }
 .eyebrow {
   font-size:12px;
@@ -133,21 +133,52 @@ a:hover {
   background:#7879e9
 }
 .hero h1 {
-  font-size:clamp(44px,5.2vw,68px);
+  font-size:clamp(42px,4.4vw,60px);
   line-height:1.22;
   font-weight:600;
   letter-spacing:-2.8px;
-  margin:27px 0
+  margin:20px 0
 }
 .accent {
   color:var(--blue)
 }
 .intro {
-  font-size:17px;
+  font-size:16px;
   line-height:1.9;
   color:var(--muted);
   max-width:475px;
-  margin-bottom:30px
+  margin-bottom:24px
+}
+.hero-promise {
+  font-size:23px;
+  font-weight:550;
+  line-height:1.55;
+  margin-bottom:16px
+}
+.hero-downloads {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px
+}
+.hero-downloads .button {
+  width:100%;
+  gap:12px;
+  padding:15px 16px;
+  font-size:14px;
+  min-height:52px
+}
+.hero-downloads small {
+  display:block;
+  margin-top:10px;
+  font-size:11px;
+  color:var(--muted)
+}
+.secondary {
+  background:white;
+  border:1px solid #d8ddec
+}
+.secondary:hover {
+  background:#eceefa
 }
 .button {
   display:inline-flex;
@@ -178,40 +209,19 @@ a:hover {
   margin-top:18px;
   line-height:1.8
 }
-.separator {
-  margin-inline:8px;
-  color:#b1b6c7
+.hero-preview img {
+  display:block;
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 22px 60px #292c6012,0 3px 10px #292c6006
 }
-.hero-art {
-  position:relative;
-  display:grid;
-  place-items:center;
-  aspect-ratio:1
-}
-.hero-art img {
-  position:relative;
-  width:88%;
-  z-index:1
-}
-.orbit {
-  position:absolute;
-  border:1px solid #dfe3f1;
-  border-radius:50%;
-  width:96%;
-  aspect-ratio:1
-}
-.orbit-two {
-  width:73%;
-  border-style:dashed
-}
-.art-caption {
-  position:absolute;
-  bottom:0;
-  right:12px;
-  color:#757d92;
-  font-size:10px;
-  line-height:1.7;
-  letter-spacing:1.8px
+.hero-preview p {
+  margin-top:20px;
+  text-align:center;
+  font-size:12px;
+  line-height:1.8;
+  color:var(--muted)
 }
 .foundation {
   border-block:1px solid var(--line);
@@ -233,6 +243,45 @@ a:hover {
   grid-template-columns:1fr 1.25fr;
   gap:80px;
   padding-block:104px
+}
+.task-story {
+  border-block:1px solid var(--line);
+  padding-block:56px
+}
+.task-story .eyebrow {
+  color:var(--blue);
+  margin-bottom:20px
+}
+.task-story>p:last-child {
+  max-width:740px;
+  margin-top:22px;
+  line-height:1.9;
+  color:var(--muted)
+}
+.start {
+  display:grid;
+  grid-template-columns:1fr 1.25fr;
+  gap:80px;
+  padding-block:72px
+}
+.start ul {
+  list-style:none;
+  padding:0;
+  margin:0 0 20px
+}
+.start li {
+  font-size:17px;
+  line-height:1.7;
+  margin-bottom:12px
+}
+.start li::before {
+  content:'✓';
+  color:var(--blue);
+  margin-right:14px
+}
+.start p:not(.eyebrow) {
+  line-height:1.8;
+  color:var(--muted)
 }
 .section-heading .eyebrow {
   color:var(--blue);
@@ -399,11 +448,6 @@ h3 {
   text-decoration:underline;
   text-underline-offset:4px
 }
-@media(min-width:1450px) {
-  .hero {
-    min-height:680px
-  }
-}
 @media(max-width:900px) {
   .wrap {
     width:calc(100% - 48px)
@@ -412,17 +456,21 @@ h3 {
     gap:20px
   }
   .hero {
-    gap:0;
+    gap:32px;
+    grid-template-columns:1fr;
     min-height:540px;
     padding-block:45px 60px
   }
   .hero h1 {
     font-size:48px
   }
+  .hero-copy {
+    max-width:560px
+  }
   .intro {
     font-size:16px
   }
-  .features {
+  .features,.start {
     gap:40px;
     padding-block:72px
   }
@@ -466,11 +514,11 @@ h3 {
   }
   .hero {
     grid-template-columns:1fr;
-    padding-block:38px 35px;
+    padding-block:24px 35px;
     gap:24px
   }
   .hero h1 {
-    font-size:48px;
+    font-size:42px;
     letter-spacing:-2px;
     line-height:1.24
   }
@@ -479,29 +527,33 @@ h3 {
     letter-spacing:1.3px
   }
   .intro {
-    max-width:440px
+    max-width:440px;
+    font-size:15px;
+    line-height:1.8
   }
-  .hero-art {
-    width:76%;
-    max-width:330px;
-    justify-self:center
+  .hero-promise {
+    font-size:20px
   }
-  .art-caption {
-    font-size:8px;
-    right:-15px;
-    bottom:2px
+  .hero-downloads .button {
+    padding:13px 12px;
+    font-size:13px;
+    gap:6px;
+    min-height:62px
+  }
+  .hero-downloads small {
+    font-size:10px
   }
   .foundation {
     flex-direction:column;
     gap:12px;
     font-size:13px
   }
-  .features {
+  .features,.start {
     grid-template-columns:1fr;
     gap:35px;
     padding-block:58px
   }
-  .section-heading h2 br {
+  html:lang(zh-CN) .section-heading h2 br {
     display:none
   }
   .feature-list article {
