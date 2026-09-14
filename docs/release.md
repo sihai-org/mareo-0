@@ -28,8 +28,24 @@ git push --atomic origin main v0.1.3
 发布任务会：
 1. 收集两端安装包（含 Windows 的 `.nupkg` 与 `RELEASES`，为将来自动更新备用）
 2. 生成 `updates/latest.json`（版本、发布时间、两端下载直链）
-3. 上传到 OSS（若已配置）与官网主机（若配置了 `ECS_HOST`/`ECS_SSH_KEY`）
-4. 创建 GitHub Release（附全部产物，作为审计与备用下载源）
+3. 上传到 OSS（若已配置）
+4. **镜像官网文件到官网主机，再把最新清单写过去**（若配置了 `ECS_HOST`/`ECS_SSH_KEY`）；先同步页面、后更新清单，避免出现"新页面读到旧清单"的空窗
+5. 创建 GitHub Release（附全部产物，作为审计与备用下载源）
+
+## 官网部署
+
+官网文件由发布流程自动同步（`scripts/deploy-site.mjs`），所以改了 `website/` 之后**必须在发版后才会生效**。需要立刻上线（例如只改了文案，不想发版）时，本地跑同一条命令：
+
+```sh
+ECS_HOST=root@114.55.15.112 MAREO_DEPLOY_KEY=~/.ssh/mareo-0.pem npm run deploy:site
+npm run deploy:site -- --dry-run          # 只看会执行什么
+```
+
+它用 `rsync --delete` 把 `website/` 镜像到 `/var/www/mareo-site/`，并：
+
+- **排除 `updates/`（发布清单）和 `downloads/`（旧链接 302 目标）**——这两个目录由发布流程独占，任何情况下都不该被网站同步覆盖或删除；
+- 用 `--chmod=Fu=rw,Fgo=r` 上传，否则本地权限是 600 的文件（macOS 下新建文件常见）会让 nginx 403；
+- 同步后自动校验首页、`/privacy.html` 与首屏大图都返回 200，校验失败即报错退出。
 
 ## 命名规范
 
@@ -57,7 +73,7 @@ RELEASES                             # （Phase 2）Squirrel 更新索引
 | macOS 公证 | `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID` |
 | Windows 签名（可选） | `WINDOWS_CERT_BASE64`、`WINDOWS_CERT_PASSWORD` |
 | OSS 上传 | `OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` |
-| 官网清单更新（可选） | `ECS_HOST`（如 `root@114.55.15.112`）、`ECS_SSH_KEY`（部署私钥内容） |
+| 官网部署与清单更新（可选） | `ECS_HOST`（如 `root@114.55.15.112`）、`ECS_SSH_KEY`（部署私钥内容） |
 
 变量（Variables）：`RELEASE_DOWNLOAD_BASE` —— 清单里下载链接的前缀，设为 `https://mareo-downloads.oss-cn-hangzhou.aliyuncs.com`。
 

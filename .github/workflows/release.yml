@@ -181,19 +181,23 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
         run: node scripts/publish-oss.mjs release/*
-      - name: Update the manifest on the website host (skipped when unconfigured)
+      - name: Publish to the website host (skipped when unconfigured)
         env:
           ECS_HOST: ${{ secrets.ECS_HOST }}
           ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
         run: |
           if [ -z "$ECS_HOST" ] || [ -z "$ECS_SSH_KEY" ]; then
-            echo "ECS_HOST/ECS_SSH_KEY not configured; manifest stays in the release artifacts."
+            echo "ECS_HOST/ECS_SSH_KEY not configured; the website and manifest stay in the release artifacts."
             exit 0
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "$ECS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new release/latest.json "$ECS_HOST:/var/www/mareo-site/updates/latest.json"
+          export MAREO_DEPLOY_KEY="$HOME/.ssh/deploy_key"
+          # Mirror the site first, then announce the release through the manifest.
+          node scripts/deploy-site.mjs
+          scp -i "$MAREO_DEPLOY_KEY" -o StrictHostKeyChecking=accept-new \
+            release/latest.json "$ECS_HOST:/var/www/mareo-site/updates/latest.json"
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
