@@ -95,9 +95,9 @@ test('drops unknown names, junk entries and oversized payloads', async () => {
 })
 
 test('truncates long detail instead of storing content', async () => {
-  const response = await postEvents({ events: [{ name: 'harness_exit', detail: 'x'.repeat(900) }] }, { token })
+  const response = await postEvents({ events: [{ name: 'harness_exit', detail: 'x'.repeat(9_000) }] }, { token })
   assert.equal(response.status, 200)
-  assert.equal(storedEvents().at(-1)!.detail?.length, 500)
+  assert.equal(storedEvents().at(-1)!.detail?.length, 4_000)
 })
 
 test('caps anonymous events per address', async () => {

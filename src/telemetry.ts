@@ -27,15 +27,19 @@ interface Envelope {
   detail?: string
 }
 
-const MAX_DETAIL_LENGTH = 500
+// The gateway accepts the same size. 4 KB is enough for a stack trace and small
+// enough that a crash report cannot become a transcript upload.
+const MAX_DETAIL_LENGTH = 4_000
 
 /**
  * Error text can carry absolute paths, and a home directory carries the local
  * user name, so whole paths — including ones with spaces — are replaced before
- * anything leaves the machine.
+ * anything leaves the machine. Length is not capped here: the envelope below
+ * owns the size limit, so a caller with more to say (a crash tail) is not
+ * silently chopped.
  */
 export function stripLocalPaths(message: string): string {
-  return message.replace(/(?:\/[\w.@+-]+(?: [\w.@+-]+)*){2,}/g, '<path>').slice(0, 200)
+  return message.replace(/(?:\/[\w.@+-]+(?: [\w.@+-]+)*){2,}/g, '<path>')
 }
 
 export class Telemetry {

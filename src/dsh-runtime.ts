@@ -5,6 +5,7 @@ import { get } from 'node:http'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
+import { stripLocalPaths } from './telemetry.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -25,7 +26,11 @@ interface StartDshRuntimeOptions {
   logFile: string
   /** Extra environment variables merged over the process environment. */
   env?: Record<string, string>
-  onUnexpectedExit(message: string): void
+  /**
+   * Called when DSH dies on its own. The second argument is the tail of its
+   * stderr, already stripped of paths and tokens, for the crash report.
+   */
+  onUnexpectedExit(message: string, errorOutput: string): void
 }
 
 interface DshPackageJson {
@@ -121,7 +126,10 @@ export async function startDshRuntime(options: StartDshRuntimeOptions): Promise<
     log.end()
     resolveExit?.()
     if (ready && !stopping) {
-      options.onUnexpectedExit(`DeepSeek Harness exited unexpectedly (${exitDescription}).`)
+      options.onUnexpectedExit(
+        `DeepSeek Harness exited unexpectedly (${exitDescription}).`,
+        reportableErrorOutput(recentErrorOutput),
+      )
     }
   })
 
@@ -211,6 +219,21 @@ function delay(milliseconds: number): Promise<void> {
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * What we are willing to send about a crash: the last few lines of technical
+ * output, with local paths and the DSH launch token removed and a hard size cap.
+ * Anything longer is a conversation fragment, not a stack trace.
+ */
+export function reportableErrorOutput(text: string, maxLines = 20, maxChars = 4_000): string {
+  const cleaned = stripLocalPaths(redactDshToken(text))
+  const lines = cleaned
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() !== '')
+  const tail = lines.slice(-maxLines).join('\n')
+  return tail.length > maxChars ? tail.slice(-maxChars) : tail
 }
 
 function redactDshToken(output: string): string {

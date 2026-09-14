@@ -112,8 +112,8 @@ test('truncates detail so nothing long can be smuggled in', async () => {
     fetchImpl: recordingFetch(sent),
   })
 
-  await telemetry.sendNow({ name: 'harness_exit', detail: { error: 'x'.repeat(900) } })
-  assert.equal(sent[0].body.events[0].detail?.length, 500)
+  await telemetry.sendNow({ name: 'harness_exit', detail: { error: 'x'.repeat(9_000) } })
+  assert.equal(sent[0].body.events[0].detail?.length, 4_000)
 })
 
 test('reported errors keep local paths — and the user name in them — out', () => {
@@ -133,7 +133,9 @@ test('reported errors keep local paths — and the user name in them — out', (
     'Timed out waiting for DeepSeek Harness to report its local address.',
   )
   assert.equal(stripLocalPaths('/Users/zhefeng/Mareo/logs/mareo.log'), '<path>')
-  assert.equal(stripLocalPaths('x'.repeat(400)).length, 200)
+  // Stripping never truncates: multi-line crash output has to survive intact.
+  const long = stripLocalPaths('x'.repeat(400))
+  assert.equal(long.length, 400)
 })
 
 test('preferences default to on, persist, and survive junk', async () => {

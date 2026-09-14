@@ -242,7 +242,7 @@ async function startMareo(): Promise<void> {
           DEEPSEEK_API_KEY: account.token,
           DEEPSEEK_BASE_URL: GATEWAY_URL,
         },
-        onUnexpectedExit: showUnexpectedExit,
+        onUnexpectedExit: (message, errorOutput) => showUnexpectedExit(message, errorOutput),
       })
       secureDshWindow(mainWindow, dshRuntime.origin)
       await mainWindow.loadURL(dshRuntime.url)
@@ -589,11 +589,17 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
   })
 }
 
-function showUnexpectedExit(message: string): void {
+function showUnexpectedExit(message: string, errorOutput = ''): void {
   dshRuntime = undefined
   recordEvent({
     name: 'harness_exit',
-    detail: { reason: stripLocalPaths(message), ms: dshStartedAt === 0 ? 0 : Date.now() - dshStartedAt },
+    detail: {
+      reason: stripLocalPaths(message),
+      ms: dshStartedAt === 0 ? 0 : Date.now() - dshStartedAt,
+      // Already stripped of paths and tokens by the runtime; empty when DSH died
+      // without saying anything.
+      ...(errorOutput === '' ? {} : { tail: errorOutput }),
+    },
   })
   if (!mainWindow || mainWindow.isDestroyed()) return
   void dialog

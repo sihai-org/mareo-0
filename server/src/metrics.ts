@@ -58,6 +58,16 @@ function detailBreakdown(db: GatewayDatabase, name: string, key: string): { valu
   return rows.map((row) => ({ value: row.value ?? '(未记录)', n: row.n }))
 }
 
+/** The crash tail is stored as JSON in `detail`; keep parsing in one place. */
+function parseCrashDetail(detail: string | null): { reason?: string; tail?: string } {
+  if (detail === null) return {}
+  try {
+    return JSON.parse(detail) as { reason?: string; tail?: string }
+  } catch {
+    return {}
+  }
+}
+
 function main(): void {
   const db = openDatabase(dbPath)
   const downloads = parseDownloads(process.argv.slice(2))
@@ -110,12 +120,22 @@ function main(): void {
     }
   }
 
+  const crashes = db
+    .prepare("SELECT accountId, ts, detail FROM events WHERE name = 'harness_exit' ORDER BY id DESC LIMIT 5")
+    .all() as { accountId: string | null; ts: string; detail: string | null }[]
   const exits = eventCounts(db, 'harness_exit')
   const launchTotal = launches.reduce((sum, row) => sum + row.n, 0)
   console.log('\n## Harness 异常退出')
   console.log(`  次数 ${exits.total}，涉及账户 ${exits.accounts}，每千次启动 ${launchTotal === 0 ? '—' : ((exits.total / launchTotal) * 1000).toFixed(1)}`)
   for (const row of detailBreakdown(db, 'harness_exit', 'reason')) {
     console.log(`    ${row.value}: ${row.n}`)
+  }
+  for (const crash of crashes) {
+    const detail = parseCrashDetail(crash.detail)
+    console.log(`  [${crash.ts.slice(0, 19)}] ${crash.accountId?.slice(0, 8) ?? '匿名'} ${detail.reason ?? ''}`)
+    if (detail.tail !== undefined) {
+      for (const line of detail.tail.split('\n')) console.log(`      ${line}`)
+    }
   }
 
   const signin = detailBreakdown(db, 'signin', 'result')

@@ -18,7 +18,7 @@ export interface ClientEvent {
 }
 
 const MAX_EVENTS_PER_REQUEST = 20
-const MAX_DETAIL_LENGTH = 500
+const MAX_DETAIL_LENGTH = 4_000
 
 /** Keeps anything unusable out; undefined means the request carried no valid event. */
 export function parseEvents(payload: unknown): ClientEvent[] | undefined {
