@@ -134,6 +134,44 @@ test('streams event-stream responses through', async () => {
   assert.ok(text.includes('second'))
 })
 
+test('warns once at the attention threshold without blocking', async () => {
+  const warnDb = openDatabase(path.join(directory, 'warn.db'))
+  const warnToken = 'warn-user-secret'
+  await issueToken(warnDb, 'Warn User', warnToken)
+  // dailyLimit 0 = no cap, so the warning must be the only thing that happens.
+  const warned = createGatewayServer({
+    db: warnDb,
+    upstreamBaseUrl: stub.url,
+    apiKey: UPSTREAM_KEY,
+    dailyLimit: 0,
+    dailyWarnLimit: 1,
+  })
+  const warnUrl = await listen(warned)
+  const lines: string[] = []
+  const originalWarn = console.warn
+  console.warn = (...args: unknown[]) => {
+    lines.push(args.join(' '))
+  }
+  const callChat = (): Promise<Response> =>
+    fetch(`${warnUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${warnToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek-chat' }),
+    })
+  try {
+    assert.equal((await callChat()).status, 200)
+    assert.equal((await callChat()).status, 200)
+    assert.equal((await callChat()).status, 200)
+  } finally {
+    console.warn = originalWarn
+    await close(warned)
+    warnDb.close()
+  }
+  const usageWarnings = lines.filter((line) => line.includes('[usage]'))
+  assert.equal(usageWarnings.length, 1, 'exactly one warning per account per day')
+  assert.match(usageWarnings[0], /reached 1 requests today/)
+})
+
 test('enforces the per-user daily limit', async () => {
   // Use a dedicated database so usage from the other tests does not leak in.
   const limitedDb = openDatabase(path.join(directory, 'limited.db'))
