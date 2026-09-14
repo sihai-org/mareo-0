@@ -128,7 +128,13 @@ test('Hero includes both platform downloads, core promise and the real screensho
   const hero = html.split('<section class="hero wrap"')[1].split('</section>')[0];
   assert.match(hero, /data-download="macos"/);
   assert.match(hero, /data-download="windows"/);
-  assert.match(hero, /免费的/);
+  assert.match(hero, /当前免费，/);
+  assert.match(hero, /不限量使用。/);
+  assert.match(hero, /Free today\./);
+  assert.match(hero, /Unlimited use\./);
+  assert.match(hero, /当前阶段不设使用次数或额度上限/);
+  assert.match(hero, /未来收费安排如有调整，将另行说明/);
+  assert.match(hero, /Any future pricing changes will be announced separately/);
   assert.match(hero, /能做表格和 PPT/);
   assert.match(hero, /assets\/mareo-workspace.png/);
 });
