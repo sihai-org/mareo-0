@@ -68,4 +68,27 @@ async function applyDownloads() {
   if (versionLabel && version) versionLabel.textContent = `v${version}`;
 }
 
+// Page-view beacon: one counting ping per page load and no identifier of any
+// kind — no cookie, no storage, no user agent; the server keeps a daily counter
+// per page only. Crawlers that do not run JavaScript never reach it, which is
+// what makes these numbers meaningful.
+const VIEW_COUNTER_URL = 'https://api.svc.mareo.cn/site-view';
+
+function countPageView() {
+  // Everything is inside the guard: counting must never be able to break the rest
+  // of the page, whatever the environment provides.
+  try {
+    const path = typeof location === 'object' && location !== null ? location.pathname : '/';
+    const body = JSON.stringify({ path });
+    if (typeof navigator === 'object' && navigator?.sendBeacon?.(VIEW_COUNTER_URL, body) === true) return;
+    void fetch(VIEW_COUNTER_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* Counting is best-effort by design. */ }
+}
+
+countPageView();
 applyDownloads();

@@ -5,6 +5,7 @@ import { createAnonymousEventLimiter, parseEvents, recordEvents } from './events
 import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from './email-auth.js'
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
+import { parseSiteView, recordSiteView } from './site-views.js'
 import { countRequestsSince, recordUsage, startOfUtcDay } from './usage.js'
 
 export interface GatewayOptions extends ProxyConfig {
@@ -49,6 +50,11 @@ async function handleRequest(
 
   if (request.method === 'POST' && pathname === '/events') {
     await handleEvents(options, request, response)
+    return
+  }
+
+  if (request.method === 'POST' && pathname === '/site-view') {
+    await handleSiteView(options, request, response)
     return
   }
 
@@ -127,6 +133,20 @@ async function handleRequest(
     options.dailyLimit > 0 &&
     countRequestsSince(options.db, owner.userId, startOfUtcDay()) >= options.dailyLimit
   ) {
+    try {
+      // A rejected request is recorded too: without it the cap is invisible in
+      // the metrics, and hitting the cap is exactly what we need to see.
+      recordUsage(options.db, {
+        userId: owner.userId,
+        model: null,
+        promptChars: 0,
+        completionChars: 0,
+        status: 429,
+        latencyMs: 0,
+      })
+    } catch {
+      // Recording the rejection must not change the rejection itself.
+    }
     sendJson(response, 429, { error: 'daily request limit reached' })
     return
   }
@@ -170,6 +190,33 @@ async function handleEvents(
     recordEvents(options.db, owner?.userId ?? null, events)
   } catch {
     // Telemetry must never surface as a client-visible failure.
+  }
+  sendJson(response, 200, { ok: true })
+}
+
+/**
+ * Website page-view beacon. Only the counted paths are accepted, the counter is
+ * per day and page (never per visitor), and the same anonymous limiter as client
+ * events keeps the endpoint from being used to inflate or to flood the table.
+ */
+async function handleSiteView(
+  options: GatewayOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const view = parseSiteView(await readJsonBody(request))
+  if (view === undefined) {
+    sendJson(response, 400, { error: 'invalid-view' })
+    return
+  }
+  if (options.anonymousEventLimiter?.(clientAddress(request)) === false) {
+    sendJson(response, 429, { error: 'too-many-views' })
+    return
+  }
+  try {
+    recordSiteView(options.db, view.path)
+  } catch {
+    // A lost page view is never worth failing a request over.
   }
   sendJson(response, 200, { ok: true })
 }

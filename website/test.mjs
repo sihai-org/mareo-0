@@ -150,3 +150,14 @@ test('Static assets and fragment links resolve within the standalone directory',
   assert.equal(new Set(ids).size, ids.length);
   assert.match(html, /<html lang="zh-CN">/);
 });
+
+test('The page view beacon sends a path and nothing else', () => {
+  assert.match(script, /api\.svc\.mareo\.cn\/site-view/);
+  const beacon = script.slice(script.indexOf('function countPageView'));
+  assert.match(beacon, /VIEW_COUNTER_URL/);
+  assert.match(beacon, /sendBeacon/);
+  // The payload carries the path and nothing that could identify a visitor.
+  assert.match(beacon, /JSON\.stringify\(\{\s*path/);
+  assert.equal(/document\.cookie|localStorage|sessionStorage/.test(beacon), false);
+  assert.equal(/userAgent|devicePixelRatio|screen\./.test(beacon), false);
+});

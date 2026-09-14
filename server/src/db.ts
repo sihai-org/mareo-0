@@ -76,9 +76,18 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_name_ts ON events(name, ts);
 CREATE INDEX IF NOT EXISTS idx_events_accountId ON events(accountId);
+
+-- Website page views. Daily counters only: no IP, no user agent, no cookie and
+-- no per-visit row, so this table can never identify a visitor.
+CREATE TABLE IF NOT EXISTS site_views (
+  day TEXT NOT NULL,
+  path TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, path)
+);
 `
 
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })
