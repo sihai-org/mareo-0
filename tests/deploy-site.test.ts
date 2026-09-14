@@ -35,7 +35,8 @@ test('the mirror never touches the directories the release pipeline owns', async
     targetDirectory: '/var/www/mareo-site',
   })
 
-  assert.deepEqual(EXCLUDED_DIRECTORIES, ['updates/', 'downloads/'])
+  // stats/ holds the generated operations page, which a plain mirror would delete.
+  assert.deepEqual(EXCLUDED_DIRECTORIES, ['updates/', 'downloads/', 'stats/'])
   for (const directory of EXCLUDED_DIRECTORIES) {
     assert.equal(args[args.indexOf('--exclude') + 1] !== undefined, true)
     assert.ok(args.includes(directory), `${directory} must be excluded`)

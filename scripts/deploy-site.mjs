@@ -17,8 +17,8 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Directories on the host that the release pipeline owns. */
-export const EXCLUDED_DIRECTORIES = ['updates/', 'downloads/']
+/** Directories on the host that something other than this mirror owns. */
+export const EXCLUDED_DIRECTORIES = ['updates/', 'downloads/', 'stats/']
 
 export function rsyncArguments({ source, host, key, targetDirectory }) {
   const withTrailingSlash = (value) => `${value.replace(/\/+$/, '')}/`
