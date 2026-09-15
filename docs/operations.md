@@ -36,6 +36,52 @@ crontab -e
 - 每日请求上限也按同一口径，**在北京时间 00:00 重置**（此前按 UTC 日，等于北京时间早上 8 点重置）；
 - 容器内设置 `TZ=Asia/Shanghai`，与宿主机、日志时间一致。中国标准时间是固定 UTC+8、无夏令时，所以计算与容器时区无关。
 
+## 成本核算（以 token 为准，不以字节为准）
+
+### 四条硬规则
+
+1. **金额只在与权威账单对账后才允许报出。** `npm run cost` 必须带 `--bill <北京日>=<元>`，报表会把"我们算的 / 你的账单 / 偏差"并列打印；偏差 >1% 时先查代码 bug，不向业务方给结论。
+2. **只用权威数据源计价。** 计费只认上游返回的 usage token；`promptChars`/`completionChars` 是**字节数**，仅用于趋势与异常检测，**不允许进入任何金额计算**。
+3. **先盘点已有数据，再提方案。** 说"我们不知道 X"之前，必须确认：上游有没有给、库里有没有存、客户端有没有。（2026-09 的教训：网关一直在收到 usage 却只数了字节，成本只能靠猜。）
+4. **每个测量口径都要有可控实验或生产数据验证**，并在代码注释里写明出处。
+
+### 为什么字节不能当钱用
+
+流式响应是**一个 token 一帧**，每帧带约 315 字节的固定 JSON 外框（`id`/`object`/`created`/`model`/`choices`…）。生产实测：
+
+```
+输出：306–314 字节 / token     输入：约 3.74 字节 / token
+```
+
+也就是响应字节数会把输出 token **高估约 300 倍**。早期用字节估算成本得出的数字全部作废。
+
+### 采集了什么（网关侧，2026-09-15 起）
+
+`usage` 表按请求记录：`inputTokens`、`cacheHitTokens`、`cacheMissTokens`、`outputTokens`、`reasoningTokens`、`sessionId`（来自 `x-deepseek-harness-session-id` 头）、`usageSource`。
+
+- `usageSource='provider'`：usage 已采集（正常情况）；
+- `usageSource='missing'`：200 但没拿到 usage（流被中断等）——**记为缺失而不是 0**，绝不能让它看起来免费；
+- `usageSource IS NULL`：2026-09-15 之前的历史行，**无法计价**，报表会单独标注且不对账。
+
+### 单价与时段
+
+官方人民币价（[来源](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)）：`deepseek-flash`（含旧名 `deepseek-v4-flash`）命中 ¥0.02 / 未命中 ¥1 / 输出 ¥4 每百万 token；**高峰时段（北京时间周一至周五 9–12、14–18 点）翻倍**，由 `ts` 自动判断。价目表在 `server/src/pricing.ts`，是唯一的算钱入口。
+
+### 跑报表与对账
+
+```sh
+# 在服务器上跑（数据库在容器里）
+ssh root@114.55.15.112 'cd /srv/mareo/server/deploy && docker compose exec -T gateway node dist/src/cost-report.js \
+  --bill 2026-09-16=12.34'
+
+# 本地跑（用数据库副本）
+DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.34
+```
+
+输出包含：每日请求数 / 已计价数 / 缺 usage / 历史行 / 输出与思考 token / 输入 token / 命中率 / 成本 / 账单 / 偏差；以及指定日期的**每用户成本**（人均、P50/P90/P99、Top 10）与**每 session 成本**。
+
+> 对账还有一个更严格的用法：把**当日 token 总量**与控制台的 token 数对比。这能把"采集准确性"和"价格表正确性"分开验证。
+
 ## 指标定义
 
 ### 获客漏斗
@@ -111,7 +157,7 @@ crontab -e
 
 | 优先级 | 补什么 | 为什么 |
 |---|---|---|
-| P1 | token 数入库（从上游响应取） | 精确算钱；现在只有字符数 |
+| ✅ 已完成 | token 入库（含缓存命中/未命中/思考）| 2026-09-15 上线，精确算钱 |
 | P1 | 更新提示曝光 + 点击下载 | 判断更新提示是否有效 |
 | P1 | `install_confirmed` 改匿名上报 | 修掉"装好但登不进去看不见"的盲点 |
 | P2 | 客户端一键导出诊断日志 | 日志都在用户本地，排障拿不到 |
