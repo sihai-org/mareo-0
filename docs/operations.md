@@ -82,6 +82,19 @@ DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.3
 
 > 对账还有一个更严格的用法：把**当日 token 总量**与控制台的 token 数对比。这能把"采集准确性"和"价格表正确性"分开验证。
 
+## 会话标签（了解"用户在做什么"）
+
+每个会话的**标题**就是它的标签，粒度是"一会话一次"，不随轮次增长。两个来源：
+
+| 来源 | 说明 |
+|---|---|
+| 网关 | 引擎为生成标题会调用一次模型（提示词 `Generate the session title from this JSON array of human messages`），这个调用经过网关，因此标题是**顺带拿到**的——不额外花钱、不额外发请求 |
+| 客户端 | 模型不可用时引擎会退回到"首条消息截断"作为标题，这种不产生模型调用，所以客户端会读本地会话记录（`storages/session_projcache/sessions/*.json` 的 `rows.title.val`）并**每会话上报一次**（已上报的记在 `<userData>/reported-session-titles.json`，标题变化会再报一次） |
+
+只保存标题文本（≤120 字符），**不保存对话正文、文件路径、文件内容**。报表按规则把标题归入「编码/调试、写作/文档、表格/数据、演示/PPT、调研/检索、文件整理、其它」，规则在 `server/src/session-labels.ts`（透明、免费，将来可换模型分类）。
+
+`npm run cost` 的每 session 区块会列出：任务类型分布 + 每个会话的标题、请求数、成本。
+
 ## 指标定义
 
 ### 获客漏斗

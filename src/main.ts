@@ -24,6 +24,7 @@ import {
 } from './update-check.js'
 import { claimUpdatePrompt } from './update-prompt.js'
 import { loadPreferences, savePreferences, type Preferences } from './preferences.js'
+import { readSessionTitles, unreportedTitles } from './session-titles.js'
 import { stripLocalPaths, Telemetry, type TelemetryEvent } from './telemetry.js'
 
 let mainWindow: BrowserWindow | undefined
@@ -250,6 +251,8 @@ async function startMareo(): Promise<void> {
       recordEvent({ name: 'launch', detail: { ok: true, ms: Date.now() - startedAt } })
       await telemetry.flush()
       await reportFirstInstall()
+      void reportSessionTitles(dshHome)
+      scheduleSessionTitleReport(dshHome)
       return
     } catch (error) {
       await dshRuntime?.stop()
@@ -587,6 +590,27 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
     }
     return { action: 'deny' }
   })
+}
+
+/**
+ * Reports the session titles the engine stores locally. Only the title text is
+ * read — no message bodies and no file paths — and each title is sent once. The
+ * gateway already sees model-generated titles; this covers the fallback ones.
+ */
+async function reportSessionTitles(dshHome: string): Promise<void> {
+  if (telemetry === undefined) return
+  const titles = await readSessionTitles(dshHome)
+  if (titles.length === 0) return
+  const statePath = path.join(app.getPath('userData'), 'reported-session-titles.json')
+  for (const entry of await unreportedTitles(statePath, titles)) {
+    telemetry.record({ name: 'session_title', detail: { sessionId: entry.sessionId, title: entry.title } })
+  }
+}
+
+/** Titles appear as sessions are created, so look again while the app runs. */
+function scheduleSessionTitleReport(dshHome: string): void {
+  const timer = setInterval(() => void reportSessionTitles(dshHome), 30 * 60 * 1000)
+  timer.unref()
 }
 
 function showUnexpectedExit(message: string, errorOutput = ''): void {

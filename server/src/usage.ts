@@ -14,6 +14,8 @@ export interface UsageRecord {
   sessionId?: string | null
   /** 'provider' when the usage block was captured, 'missing' when it was not. */
   usageSource?: 'provider' | 'missing'
+  /** 'title' for the session-title call, 'chat' for everything else. */
+  requestKind?: 'chat' | 'title'
 }
 
 export function recordUsage(db: GatewayDatabase, record: UsageRecord): void {
@@ -22,8 +24,8 @@ export function recordUsage(db: GatewayDatabase, record: UsageRecord): void {
     `INSERT INTO usage (
        userId, ts, model, promptChars, completionChars, status, latencyMs,
        inputTokens, cacheHitTokens, cacheMissTokens, outputTokens, reasoningTokens,
-       sessionId, usageSource
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       sessionId, usageSource, requestKind
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     record.userId,
     new Date().toISOString(),
@@ -39,6 +41,7 @@ export function recordUsage(db: GatewayDatabase, record: UsageRecord): void {
     tokens?.reasoningTokens ?? null,
     record.sessionId ?? null,
     record.usageSource ?? (tokens === undefined ? null : 'provider'),
+    record.requestKind ?? 'chat',
   )
 }
 

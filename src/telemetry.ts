@@ -4,7 +4,7 @@
  * on real machines. Nothing else is sent — no conversation content, no prompts,
  * no email, no device identifier — and sending never blocks or fails a launch.
  */
-export type TelemetryEventName = 'install_confirmed' | 'launch' | 'harness_exit' | 'signin'
+export type TelemetryEventName = 'install_confirmed' | 'launch' | 'harness_exit' | 'signin' | 'session_title'
 
 export interface TelemetryEvent {
   name: TelemetryEventName

@@ -5,6 +5,7 @@ import { createAnonymousEventLimiter, parseEvents, recordEvents } from './events
 import { beginEmailCode, isValidEmail, normalizeEmail, verifyEmailCode } from './email-auth.js'
 import { createEmailMailer, type Mailer } from './mailer.js'
 import { proxyRequest, type ProxyConfig } from './proxy.js'
+import { parseSessionTitleDetail, recordSessionTitle } from './session-titles.js'
 import { parseSiteView, recordSiteView } from './site-views.js'
 import { startOfDay } from './clock.js'
 import { countRequestsSince, recordUsage } from './usage.js'
@@ -181,7 +182,13 @@ async function handleRequest(
       // A 200 whose usage we did not capture is recorded as missing, never as
       // zero: an unaccounted request must not look free.
       usageSource: outcome.status === 200 ? (outcome.tokens === undefined ? 'missing' : 'provider') : undefined,
+      requestKind: outcome.requestKind,
     })
+    // The session-title call carries the title the user sees in their own list;
+    // recording it is what makes "what was this session about" answerable.
+    if (outcome.requestKind === 'title' && outcome.titleText !== undefined) {
+      recordSessionTitle(options.db, owner.userId, outcome.sessionId ?? null, outcome.titleText, 'gateway')
+    }
   } catch {
     // Usage accounting must never break a successful proxy exchange.
   }
@@ -208,7 +215,15 @@ async function handleEvents(
     return
   }
   try {
-    recordEvents(options.db, owner?.userId ?? null, events)
+    // Session titles arrive as an event but belong in their own table: one row
+    // per session, not one row per report.
+    for (const event of events.filter((entry) => entry.name === 'session_title')) {
+      const detail = parseSessionTitleDetail(event.detail)
+      if (detail !== undefined) {
+        recordSessionTitle(options.db, owner?.userId ?? null, detail.sessionId, detail.title, 'client')
+      }
+    }
+    recordEvents(options.db, owner?.userId ?? null, events.filter((entry) => entry.name !== 'session_title'))
   } catch {
     // Telemetry must never surface as a client-visible failure.
   }

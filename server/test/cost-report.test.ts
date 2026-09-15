@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import { createTokenAccount, openDatabase, type GatewayDatabase } from '../src/db.js'
-import { usageFromResponseText } from '../src/proxy.js'
+import { isTitleRequest, textFromResponseTail, usageFromResponseText } from '../src/proxy.js'
 import { cacheHitRate, costOf, isPeakHour, knownModels, priceFor } from '../src/pricing.js'
 import { recordUsage } from '../src/usage.js'
-import { dayOf, parseBillArguments, perSessionCost, perUserCost, percentile, summarizeDays, tokensOf } from '../src/cost-report.js'
+import { categoryBreakdown, dayOf, loadSessionTitles, parseBillArguments, perSessionCost, perUserCost, percentile, summarizeDays, tokensOf } from '../src/cost-report.js'
+import { classifyTitle } from '../src/session-labels.js'
+import { parseSessionTitleDetail, recordSessionTitle } from '../src/session-titles.js'
 
 let directory: string
 let db: GatewayDatabase
@@ -173,4 +175,59 @@ test('percentiles and bill parsing are exact', () => {
   assert.equal(bills.get('2026-09-15'), 4.32)
   assert.throws(() => parseBillArguments(['--bill', 'nonsense']), /--bill/)
   assert.equal(dayOf('2026-09-14T16:30:00.000Z'), '2026-09-15')
+})
+
+test('recognises the session-title call and reads the title out of the response', () => {
+  const titleBody = Buffer.from(
+    JSON.stringify({ messages: [{ role: 'user', content: 'Generate the session title from this JSON array of human messages: ["帮我看看这个表格"]' }] }),
+  )
+  assert.equal(isTitleRequest(titleBody), true)
+  assert.equal(isTitleRequest(Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: '普通提问' }] }))), false)
+  assert.equal(isTitleRequest(Buffer.alloc(0)), false)
+
+  const streamed =
+    'data: {"choices":[{"delta":{"content":"表格"}}]}\n\n' +
+    'data: {"choices":[{"delta":{"content":"数据整理"}}]}\n\n' +
+    'data: [DONE]\n\n'
+  assert.equal(textFromResponseTail(streamed), '表格数据整理')
+
+  const plain = JSON.stringify({ choices: [{ message: { content: '成本核算' } }] })
+  assert.equal(textFromResponseTail(plain), '成本核算')
+  assert.equal(textFromResponseTail('data: {"choices":[{"delta":{}}]}\n\n'), undefined)
+})
+
+test('session titles are stored once per session and refreshed in place', () => {
+  const userId = createTokenAccount(db, '标题测试')
+  assert.equal(recordSessionTitle(db, userId, 'session-a', '修复登录 bug', 'gateway'), true)
+  assert.equal(recordSessionTitle(db, userId, 'session-a', '修复登录流程 bug', 'client'), true)
+  assert.equal(recordSessionTitle(db, null, 'session-b', '匿名会话', 'client'), false)
+  assert.equal(recordSessionTitle(db, userId, null, '没有会话', 'client'), false)
+  assert.equal(recordSessionTitle(db, userId, 'session-c', '   ', 'client'), false)
+
+  const titles = loadSessionTitles(db)
+  assert.equal(titles.get('session-a')?.title, '修复登录流程 bug')
+  assert.equal(titles.get('session-a')?.source, 'client')
+  assert.equal(titles.has('session-b'), false)
+
+  const detail = parseSessionTitleDetail(JSON.stringify({ sessionId: 'session-d', title: '写一份周报' }))
+  assert.deepEqual(detail, { sessionId: 'session-d', title: '写一份周报' })
+  assert.equal(parseSessionTitleDetail('{"sessionId":"x"}'), undefined)
+  assert.equal(parseSessionTitleDetail('not json'), undefined)
+})
+
+test('titles are classified into work categories', () => {
+  assert.equal(classifyTitle('修复 TypeScript 编译报错'), 'coding')
+  assert.equal(classifyTitle('把这份 Excel 数据汇总一下'), 'spreadsheet')
+  assert.equal(classifyTitle('做一个产品介绍 PPT'), 'slides')
+  assert.equal(classifyTitle('写一篇关于茶文化的文章'), 'writing')
+  assert.equal(classifyTitle('调研一下竞品的定价'), 'research')
+  assert.equal(classifyTitle('帮我整理文件并重命名'), 'files')
+  assert.equal(classifyTitle('你好'), 'other')
+
+  const titles = new Map([
+    ['session-a', { sessionId: 'session-a', title: '修复 bug', source: 'gateway' }],
+    ['session-b', { sessionId: 'session-b', title: '写周报', source: 'client' }],
+  ])
+  const breakdown = categoryBreakdown(titles, ['session-a', 'session-b', 'session-c'])
+  assert.deepEqual(breakdown, [['coding', 1], ['writing', 1], ['other', 1]])
 })

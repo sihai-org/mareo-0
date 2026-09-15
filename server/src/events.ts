@@ -5,7 +5,7 @@ import type { GatewayDatabase } from './db.js'
  * is dropped rather than stored, so the table can only ever hold these four
  * shapes of operational data.
  */
-export const CLIENT_EVENT_NAMES = ['install_confirmed', 'launch', 'harness_exit', 'signin'] as const
+export const CLIENT_EVENT_NAMES = ['install_confirmed', 'launch', 'harness_exit', 'signin', 'session_title'] as const
 
 export type ClientEventName = (typeof CLIENT_EVENT_NAMES)[number]
 

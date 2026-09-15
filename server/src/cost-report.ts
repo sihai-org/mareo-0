@@ -9,6 +9,7 @@
 // visible instead of plausible.
 import { openDatabase, type GatewayDatabase } from './db.js'
 import { costOf, type TokenUsage } from './pricing.js'
+import { CATEGORY_LABELS, classifyTitle, type WorkCategory } from './session-labels.js'
 
 const dbPath = process.env.DB_PATH ?? 'data/mareo.db'
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000
@@ -177,6 +178,30 @@ function money(value: number): string {
   return `¥${value.toFixed(2)}`
 }
 
+export interface SessionTitleRow {
+  sessionId: string
+  title: string
+  source: string
+}
+
+export function loadSessionTitles(db: GatewayDatabase): Map<string, SessionTitleRow> {
+  const rows = db
+    .prepare('SELECT sessionId, title, source FROM session_titles')
+    .all() as unknown as SessionTitleRow[]
+  return new Map(rows.map((row) => [row.sessionId, row]))
+}
+
+/** Sessions grouped by the coarse category of their title. */
+export function categoryBreakdown(titles: Map<string, SessionTitleRow>, sessionIds: string[]): [WorkCategory, number][] {
+  const counts = new Map<WorkCategory, number>()
+  for (const sessionId of sessionIds) {
+    const title = titles.get(sessionId)?.title
+    const category: WorkCategory = title === undefined ? 'other' : classifyTitle(title)
+    counts.set(category, (counts.get(category) ?? 0) + 1)
+  }
+  return [...counts].sort((left, right) => right[1] - left[1])
+}
+
 function loadRows(db: GatewayDatabase): Row[] {
   return db
     .prepare(
@@ -259,6 +284,23 @@ function main(): void {
       }
     } else {
       console.log('\n## 每 session 成本：暂无数据（客户端未上报 session 头）')
+    }
+
+    const titles = loadSessionTitles(db)
+    const sessionIds = [...new Set(rows.filter((row) => dayOf(row.ts) === target && row.sessionId !== null).map((row) => row.sessionId as string))]
+    const bySession = new Map(perSessionCost(rows, target).map((entry) => [entry.sessionId, entry]))
+    if (sessionIds.length > 0) {
+      const labels = sessionIds.filter((sessionId) => titles.has(sessionId)).length
+      console.log(`\n## ${target} 会话标签（${labels}/${sessionIds.length} 个会话有标题）`)
+      const breakdown = categoryBreakdown(titles, sessionIds)
+      console.log('  任务类型分布：' + breakdown.map(([category, count]) => `${CATEGORY_LABELS[category]} ${count}`).join(' · '))
+      const rows_ = sessionIds
+        .map((sessionId) => ({ sessionId, title: titles.get(sessionId)?.title, cost: bySession.get(sessionId)?.cost ?? 0, requests: bySession.get(sessionId)?.requests ?? 0 }))
+        .sort((left, right) => right.cost - left.cost)
+      for (const entry of rows_.slice(0, 12)) {
+        const label = entry.title === undefined ? '（无标题）' : `${entry.title}  [${CATEGORY_LABELS[classifyTitle(entry.title)]}]`
+        console.log(`    ${String(entry.requests).padStart(5)} 次  ${money(entry.cost).padStart(8)}  ${label}`)
+      }
     }
   }
 }

@@ -7,6 +7,50 @@ export interface ProxyConfig {
   apiKey: string
 }
 
+/**
+ * The harness asks its model for a session title once per session, using this
+ * instruction. That call already flows through us, so the title — the label the
+ * user sees in their own session list — can be recorded without an extra model
+ * call, an extra request, or any client change.
+ */
+const TITLE_INSTRUCTION = /generate the session title|session title from this/i
+
+export function isTitleRequest(body: Buffer): boolean {
+  if (body.length === 0) return false
+  return TITLE_INSTRUCTION.test(body.toString('utf8'))
+}
+
+/**
+ * Pulls the assistant text out of whatever we kept of the response: streamed
+ * deltas or a plain JSON body. Only used for title calls, whose whole point is
+ * that short piece of text.
+ */
+export function textFromResponseTail(text: string): string | undefined {
+  let collected = ''
+  const push = (value: unknown): void => {
+    if (typeof value === 'string') collected += value
+  }
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    const payload = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed
+    if (payload === '' || payload === '[DONE]') continue
+    if (!payload.startsWith('{')) continue
+    try {
+      const json = JSON.parse(payload) as {
+        choices?: { delta?: { content?: unknown }; message?: { content?: unknown } }[]
+      }
+      for (const choice of json.choices ?? []) {
+        push(choice.delta?.content)
+        push(choice.message?.content)
+      }
+    } catch {
+      // A frame we cannot parse is simply not part of the title.
+    }
+  }
+  const title = collected.replace(/\s+/g, ' ').trim()
+  return title === '' ? undefined : title.slice(0, 120)
+}
+
 export interface ProxyOutcome {
   status: number
   model: string | null
@@ -17,6 +61,10 @@ export interface ProxyOutcome {
   tokens?: TokenUsage
   /** Harness session id, when the client sent one. */
   sessionId?: string | null
+  /** 'title' for the session-title call, 'chat' for everything else. */
+  requestKind: 'chat' | 'title'
+  /** The generated title, for title calls only. */
+  titleText?: string
 }
 
 /**
@@ -136,6 +184,7 @@ export async function proxyRequest(
   const model = modelFromBody(body)
   const sessionHeader = request.headers['x-deepseek-harness-session-id']
   const sessionId = typeof sessionHeader === 'string' && sessionHeader !== '' ? sessionHeader : null
+  const requestKind: 'chat' | 'title' = isTitleRequest(body) ? 'title' : 'chat'
 
   const upstreamUrl = new URL(request.url ?? '/', withTrailingSlash(config.upstreamBaseUrl)).toString()
   const forwardedHeaders: Record<string, string> = { authorization: `Bearer ${config.apiKey}` }
@@ -160,6 +209,7 @@ export async function proxyRequest(
       promptChars: body.length,
       completionChars: 0,
       latencyMs: Date.now() - started,
+      requestKind,
     }
   }
 
@@ -171,7 +221,15 @@ export async function proxyRequest(
   let tail = ''
   if (upstream.body === null) {
     response.end()
-    return { status: upstream.status, model, promptChars: body.length, completionChars, latencyMs: Date.now() - started, sessionId }
+    return {
+      status: upstream.status,
+      model,
+      promptChars: body.length,
+      completionChars,
+      latencyMs: Date.now() - started,
+      sessionId,
+      requestKind,
+    }
   }
 
   await new Promise<void>((resolve) => {
@@ -197,6 +255,8 @@ export async function proxyRequest(
     latencyMs: Date.now() - started,
     tokens: upstream.status === 200 ? usageFromResponseText(tail) : undefined,
     sessionId,
+    requestKind,
+    titleText: requestKind === 'title' && upstream.status === 200 ? textFromResponseTail(tail) : undefined,
   }
 }
 

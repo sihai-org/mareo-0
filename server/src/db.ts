@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS usage (
   completionChars INTEGER NOT NULL,
   status INTEGER NOT NULL,
   latencyMs INTEGER NOT NULL,
+  requestKind TEXT,
   inputTokens INTEGER,
   cacheHitTokens INTEGER,
   cacheMissTokens INTEGER,
@@ -89,6 +90,19 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_name_ts ON events(name, ts);
 CREATE INDEX IF NOT EXISTS idx_events_accountId ON events(accountId);
 
+-- One row per会话: the title the engine already generates for它, which is the
+-- per-session label we report on. The title is derived from the start of the
+-- conversation, so it may contain a few words of the user's first message —
+-- the privacy notice says so, and no conversation body is stored anywhere.
+CREATE TABLE IF NOT EXISTS session_titles (
+  accountId TEXT NOT NULL,
+  sessionId TEXT NOT NULL,
+  title TEXT NOT NULL,
+  source TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  PRIMARY KEY (accountId, sessionId)
+);
+
 -- Website page views. Daily counters only: no IP, no user agent, no cookie and
 -- no per-visit row, so this table can never identify a visitor.
 CREATE TABLE IF NOT EXISTS site_views (
@@ -99,7 +113,7 @@ CREATE TABLE IF NOT EXISTS site_views (
 );
 `
 
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })
@@ -130,6 +144,7 @@ function addTokenColumns(db: GatewayDatabase): void {
     ['reasoningTokens', 'INTEGER'],
     ['sessionId', 'TEXT'],
     ['usageSource', 'TEXT'],
+    ['requestKind', 'TEXT'],
   ]
   for (const [name, type] of additions) {
     if (!columns.includes(name)) db.exec(`ALTER TABLE usage ADD COLUMN ${name} ${type}`)
