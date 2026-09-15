@@ -14,10 +14,28 @@ export interface ProxyConfig {
  * call, an extra request, or any client change.
  */
 const TITLE_INSTRUCTION = /generate the session title|session title from this/i
+/** Title calls are one small message; agent turns carry MB of context. */
+const TITLE_MAX_BODY_BYTES = 64 * 1024
+/** A title is a short label; anything longer is a reply, not a title. */
+const TITLE_MAX_CHARS = 200
 
+/**
+ * Recognises the session-title call structurally, not by substring: the
+ * instruction has to be in the first message and the request has to be small.
+ * A conversation that merely *mentions* the instruction (this codebase's own
+ * chat did, which is how the false positive was found) must not be mistaken for
+ * a title call — that would store reply text as a "title".
+ */
 export function isTitleRequest(body: Buffer): boolean {
-  if (body.length === 0) return false
-  return TITLE_INSTRUCTION.test(body.toString('utf8'))
+  if (body.length === 0 || body.length > TITLE_MAX_BODY_BYTES) return false
+  try {
+    const parsed = JSON.parse(body.toString('utf8')) as { messages?: { content?: unknown }[] }
+    const first = parsed.messages?.[0]?.content
+    if (typeof first !== 'string') return false
+    return TITLE_INSTRUCTION.test(first)
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -48,7 +66,10 @@ export function textFromResponseTail(text: string): string | undefined {
     }
   }
   const title = collected.replace(/\s+/g, ' ').trim()
-  return title === '' ? undefined : title.slice(0, 120)
+  // Longer than a label means we are looking at a reply, not a title: drop it
+  // rather than store conversation text where only labels belong.
+  if (title === '' || title.length > TITLE_MAX_CHARS) return undefined
+  return title.slice(0, 120)
 }
 
 export interface ProxyOutcome {

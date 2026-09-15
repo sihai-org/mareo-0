@@ -185,6 +185,19 @@ test('recognises the session-title call and reads the title out of the response'
   assert.equal(isTitleRequest(Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: '普通提问' }] }))), false)
   assert.equal(isTitleRequest(Buffer.alloc(0)), false)
 
+  // A big agent turn that merely mentions the instruction is not a title call.
+  const mentioned = Buffer.from(
+    JSON.stringify({
+      messages: [{ role: 'user', content: 'x'.repeat(200_000) + 'Generate the session title from this JSON array of human messages:' }],
+    }),
+  )
+  assert.equal(isTitleRequest(mentioned), false)
+  // The instruction in a later message is not the title call either.
+  const laterMessage = Buffer.from(
+    JSON.stringify({ messages: [{ role: 'user', content: '普通提问' }, { role: 'user', content: 'Generate the session title from this' }] }),
+  )
+  assert.equal(isTitleRequest(laterMessage), false)
+
   const streamed =
     'data: {"choices":[{"delta":{"content":"表格"}}]}\n\n' +
     'data: {"choices":[{"delta":{"content":"数据整理"}}]}\n\n' +
@@ -194,6 +207,10 @@ test('recognises the session-title call and reads the title out of the response'
   const plain = JSON.stringify({ choices: [{ message: { content: '成本核算' } }] })
   assert.equal(textFromResponseTail(plain), '成本核算')
   assert.equal(textFromResponseTail('data: {"choices":[{"delta":{}}]}\n\n'), undefined)
+
+  // A real reply is long: it must never be stored as a title.
+  const reply = '这是一段很长的回复正文。'.repeat(40)
+  assert.equal(textFromResponseTail(JSON.stringify({ choices: [{ message: { content: reply } }] })), undefined)
 })
 
 test('session titles are stored once per session and refreshed in place', () => {
