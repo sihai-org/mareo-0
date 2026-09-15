@@ -12,12 +12,16 @@ export function recordSessionTitle(
   source: 'gateway' | 'client',
 ): boolean {
   const trimmed = title.replace(/\s+/g, ' ').trim().slice(0, 120)
-  if (accountId === null || sessionId === null || trimmed === '') return false
+  if (accountId === null || trimmed === '') return false
+  // The title call does not always carry a session header. The label is still
+  // worth keeping — it answers "what is this account working on" — so it is
+  // stored under a synthetic key until the client reports the exact session.
+  const key = sessionId ?? `unattributed:${new Date().toISOString()}`
   db.prepare(
     `INSERT INTO session_titles (accountId, sessionId, title, source, updatedAt)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (accountId, sessionId) DO UPDATE SET title = excluded.title, source = excluded.source, updatedAt = excluded.updatedAt`,
-  ).run(accountId, sessionId, trimmed, source, new Date().toISOString())
+  ).run(accountId, key, trimmed, source, new Date().toISOString())
   return true
 }
 

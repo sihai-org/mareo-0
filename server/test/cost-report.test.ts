@@ -7,7 +7,7 @@ import { createTokenAccount, openDatabase, type GatewayDatabase } from '../src/d
 import { isTitleRequest, textFromResponseTail, usageFromResponseText } from '../src/proxy.js'
 import { cacheHitRate, costOf, isPeakHour, knownModels, priceFor } from '../src/pricing.js'
 import { recordUsage } from '../src/usage.js'
-import { categoryBreakdown, dayOf, loadSessionTitles, parseBillArguments, perSessionCost, perUserCost, percentile, summarizeDays, tokensOf } from '../src/cost-report.js'
+import { categoryBreakdown, dayOf, loadSessionTitles, loadTitleFeed, parseBillArguments, perSessionCost, perUserCost, percentile, summarizeDays, tokensOf } from '../src/cost-report.js'
 import { classifyTitle } from '../src/session-labels.js'
 import { parseSessionTitleDetail, recordSessionTitle } from '../src/session-titles.js'
 
@@ -235,8 +235,13 @@ test('session titles are stored once per session and refreshed in place', () => 
   assert.equal(recordSessionTitle(db, userId, 'session-a', '修复登录 bug', 'gateway'), true)
   assert.equal(recordSessionTitle(db, userId, 'session-a', '修复登录流程 bug', 'client'), true)
   assert.equal(recordSessionTitle(db, null, 'session-b', '匿名会话', 'client'), false)
-  assert.equal(recordSessionTitle(db, userId, null, '没有会话', 'client'), false)
   assert.equal(recordSessionTitle(db, userId, 'session-c', '   ', 'client'), false)
+  // A title call without a session header is still kept, under a feed key.
+  assert.equal(recordSessionTitle(db, userId, null, '把这份 Excel 汇总', 'gateway'), true)
+  const feed = loadTitleFeed(db)
+  assert.equal(feed.length, 1)
+  assert.equal(feed[0].title, '把这份 Excel 汇总')
+  assert.equal(classifyTitle(feed[0].title), 'spreadsheet')
 
   const titles = loadSessionTitles(db)
   assert.equal(titles.get('session-a')?.title, '修复登录流程 bug')

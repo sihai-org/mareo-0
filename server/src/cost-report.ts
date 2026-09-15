@@ -184,6 +184,13 @@ export interface SessionTitleRow {
   source: string
 }
 
+/** Titles we could not attach to a session, newest first — the "what are they doing" feed. */
+export function loadTitleFeed(db: GatewayDatabase, limit = 15): { accountId: string; title: string; source: string; updatedAt: string }[] {
+  return db
+    .prepare("SELECT accountId, title, source, updatedAt FROM session_titles WHERE sessionId LIKE 'unattributed:%' ORDER BY updatedAt DESC LIMIT ?")
+    .all(limit) as unknown as { accountId: string; title: string; source: string; updatedAt: string }[]
+}
+
 export function loadSessionTitles(db: GatewayDatabase): Map<string, SessionTitleRow> {
   const rows = db
     .prepare('SELECT sessionId, title, source FROM session_titles')
@@ -284,6 +291,14 @@ function main(): void {
       }
     } else {
       console.log('\n## 每 session 成本：暂无数据（客户端未上报 session 头）')
+    }
+
+    const feed = loadTitleFeed(db)
+    if (feed.length > 0) {
+      console.log(`\n## 会话标题流（未绑定到具体会话，最近 ${feed.length} 条）`)
+      for (const entry of feed) {
+        console.log(`    ${entry.updatedAt.slice(5, 16)}  ${entry.accountId.slice(0, 8)}  ${entry.title}  [${CATEGORY_LABELS[classifyTitle(entry.title)]}]`)
+      }
     }
 
     const titles = loadSessionTitles(db)
