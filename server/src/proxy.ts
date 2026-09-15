@@ -13,26 +13,31 @@ export interface ProxyConfig {
  * user sees in their own session list — can be recorded without an extra model
  * call, an extra request, or any client change.
  */
-const TITLE_INSTRUCTION = /generate the session title|session title from this/i
+const TITLE_INSTRUCTION = /^(?:generate the session title|session title from this)/i
 /** Title calls are one small message; agent turns carry MB of context. */
 const TITLE_MAX_BODY_BYTES = 64 * 1024
 /** A title is a short label; anything longer is a reply, not a title. */
 const TITLE_MAX_CHARS = 200
 
 /**
- * Recognises the session-title call structurally, not by substring: the
- * instruction has to be in the first message and the request has to be small.
- * A conversation that merely *mentions* the instruction (this codebase's own
- * chat did, which is how the false positive was found) must not be mistaken for
- * a title call — that would store reply text as a "title".
+ * Recognises the session-title call structurally, never by loose substring:
+ *
+ *  - the request is small (a title call is one short instruction plus the human
+ *    messages; agent turns carry megabytes of context), and
+ *  - one of its messages *starts with* the instruction. The harness sends it as
+ *    a user message (`Generate the session title from this JSON array of human
+ *    messages: …`) after a system message, so scanning only the first message
+ *    would never match — and matching the phrase anywhere would classify a
+ *    conversation that merely quotes it, which is how reply text once ended up
+ *    stored as a "title".
  */
 export function isTitleRequest(body: Buffer): boolean {
   if (body.length === 0 || body.length > TITLE_MAX_BODY_BYTES) return false
   try {
     const parsed = JSON.parse(body.toString('utf8')) as { messages?: { content?: unknown }[] }
-    const first = parsed.messages?.[0]?.content
-    if (typeof first !== 'string') return false
-    return TITLE_INSTRUCTION.test(first)
+    return (parsed.messages ?? []).some(
+      (message) => typeof message.content === 'string' && TITLE_INSTRUCTION.test(message.content.trimStart()),
+    )
   } catch {
     return false
   }

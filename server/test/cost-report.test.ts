@@ -178,10 +178,21 @@ test('percentiles and bill parsing are exact', () => {
 })
 
 test('recognises the session-title call and reads the title out of the response', () => {
+  // The real shape: a system message first, then the instruction as a user message.
   const titleBody = Buffer.from(
-    JSON.stringify({ messages: [{ role: 'user', content: 'Generate the session title from this JSON array of human messages: ["帮我看看这个表格"]' }] }),
+    JSON.stringify({
+      messages: [
+        { role: 'system', content: 'Create a concise title for an AI coding-assistant session from the supplied human messages.' },
+        { role: 'user', content: 'Generate the session title from this JSON array of human messages: ["帮我看看这个表格"]' },
+      ],
+    }),
   )
   assert.equal(isTitleRequest(titleBody), true)
+  // Mentioning the instruction mid-message is not a title call.
+  assert.equal(
+    isTitleRequest(Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: '我上一条消息里引用了 Generate the session title from this 这句话' }] }))),
+    false,
+  )
   assert.equal(isTitleRequest(Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: '普通提问' }] }))), false)
   assert.equal(isTitleRequest(Buffer.alloc(0)), false)
 
@@ -192,11 +203,17 @@ test('recognises the session-title call and reads the title out of the response'
     }),
   )
   assert.equal(isTitleRequest(mentioned), false)
-  // The instruction in a later message is not the title call either.
+  // The instruction sits in a later message in the real shape, so a small
+  // request whose *second* message starts with it IS the title call.
   const laterMessage = Buffer.from(
-    JSON.stringify({ messages: [{ role: 'user', content: '普通提问' }, { role: 'user', content: 'Generate the session title from this' }] }),
+    JSON.stringify({
+      messages: [
+        { role: 'system', content: 'Create a concise title for an AI coding-assistant session.' },
+        { role: 'user', content: 'Generate the session title from this JSON array of human messages: ["写周报"]' },
+      ],
+    }),
   )
-  assert.equal(isTitleRequest(laterMessage), false)
+  assert.equal(isTitleRequest(laterMessage), true)
 
   const streamed =
     'data: {"choices":[{"delta":{"content":"表格"}}]}\n\n' +
