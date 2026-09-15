@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
+import type { TokenUsage } from './pricing.js'
 
 export interface ProxyConfig {
   upstreamBaseUrl: string
@@ -12,6 +13,83 @@ export interface ProxyOutcome {
   promptChars: number
   completionChars: number
   latencyMs: number
+  /** Tokens the provider reported, undefined when it reported none. */
+  tokens?: TokenUsage
+  /** Harness session id, when the client sent one. */
+  sessionId?: string | null
+}
+
+/**
+ * How much of the response tail we keep while looking for the usage block. The
+ * block is the last thing the provider sends, in a streaming chunk or at the end
+ * of a JSON body, so a bounded tail is enough — the reply itself is never kept.
+ */
+const USAGE_TAIL_BYTES = 256 * 1024
+
+function numberFrom(record: Record<string, unknown>, key: string): number {
+  const value = record[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+/**
+ * Extracts the provider's token usage from a response tail. Returns undefined
+ * when there is no usage block, which callers must record as "missing" rather
+ * than as zero — a request whose tokens we did not see must never look free.
+ */
+export function usageFromResponseText(text: string): TokenUsage | undefined {
+  const marker = text.lastIndexOf('"usage"')
+  if (marker < 0) return undefined
+  const start = text.indexOf('{', marker)
+  if (start < 0) return undefined
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  let end = -1
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') inString = false
+      continue
+    }
+    if (character === '"') inString = true
+    else if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) {
+        end = index
+        break
+      }
+    }
+  }
+  if (end < 0) return undefined
+
+  let raw: Record<string, unknown>
+  try {
+    raw = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
+  } catch {
+    return undefined
+  }
+
+  const inputTokens = numberFrom(raw, 'prompt_tokens')
+  const outputTokens = numberFrom(raw, 'completion_tokens')
+  const cacheHitTokens = numberFrom(raw, 'prompt_cache_hit_tokens')
+  // Older shapes report the cached count inside prompt_tokens_details.
+  const details = raw.prompt_tokens_details
+  const cachedFromDetails =
+    typeof details === 'object' && details !== null ? numberFrom(details as Record<string, unknown>, 'cached_tokens') : 0
+  const hit = cacheHitTokens > 0 ? cacheHitTokens : cachedFromDetails
+  const miss = raw.prompt_cache_miss_tokens !== undefined ? numberFrom(raw, 'prompt_cache_miss_tokens') : Math.max(0, inputTokens - hit)
+  const completionDetails = raw.completion_tokens_details
+  const reasoningTokens =
+    typeof completionDetails === 'object' && completionDetails !== null
+      ? numberFrom(completionDetails as Record<string, unknown>, 'reasoning_tokens')
+      : 0
+
+  if (inputTokens === 0 && outputTokens === 0) return undefined
+  return { inputTokens, cacheHitTokens: hit, cacheMissTokens: miss, outputTokens, reasoningTokens }
 }
 
 function readBody(request: IncomingMessage): Promise<Buffer> {
@@ -56,6 +134,8 @@ export async function proxyRequest(
   const started = Date.now()
   const body = await readBody(request)
   const model = modelFromBody(body)
+  const sessionHeader = request.headers['x-deepseek-harness-session-id']
+  const sessionId = typeof sessionHeader === 'string' && sessionHeader !== '' ? sessionHeader : null
 
   const upstreamUrl = new URL(request.url ?? '/', withTrailingSlash(config.upstreamBaseUrl)).toString()
   const forwardedHeaders: Record<string, string> = { authorization: `Bearer ${config.apiKey}` }
@@ -88,9 +168,10 @@ export async function proxyRequest(
   if (upstreamType !== null) response.setHeader('content-type', upstreamType)
 
   let completionChars = 0
+  let tail = ''
   if (upstream.body === null) {
     response.end()
-    return { status: upstream.status, model, promptChars: body.length, completionChars, latencyMs: Date.now() - started }
+    return { status: upstream.status, model, promptChars: body.length, completionChars, latencyMs: Date.now() - started, sessionId }
   }
 
   await new Promise<void>((resolve) => {
@@ -100,12 +181,23 @@ export async function proxyRequest(
     const stream = Readable.fromWeb(upstream.body as unknown as import('node:stream/web').ReadableStream)
     stream.on('data', (chunk: Buffer) => {
       completionChars += chunk.length
+      // Keep only the tail: the usage block is last, and the body itself is not
+      // ours to retain.
+      tail = (tail + chunk.toString('utf8')).slice(-USAGE_TAIL_BYTES)
     })
     stream.on('error', () => response.destroy())
     stream.pipe(response)
   })
 
-  return { status: upstream.status, model, promptChars: body.length, completionChars, latencyMs: Date.now() - started }
+  return {
+    status: upstream.status,
+    model,
+    promptChars: body.length,
+    completionChars,
+    latencyMs: Date.now() - started,
+    tokens: upstream.status === 200 ? usageFromResponseText(tail) : undefined,
+    sessionId,
+  }
 }
 
 function withTrailingSlash(baseUrl: string): string {

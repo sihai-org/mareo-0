@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS tokens (
   revokedAt TEXT
 );
 
+-- promptChars/completionChars are BYTE counts of the request/response bodies.
+-- They are for trend and abuse detection only: a streaming response carries one
+-- JSON frame per token, so response bytes overstate tokens by roughly 300x and
+-- must never be used to price anything. Money comes from the token columns,
+-- which are copied verbatim from the usage block the provider returns.
 CREATE TABLE IF NOT EXISTS usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   userId TEXT NOT NULL REFERENCES users(id),
@@ -38,7 +43,14 @@ CREATE TABLE IF NOT EXISTS usage (
   promptChars INTEGER NOT NULL,
   completionChars INTEGER NOT NULL,
   status INTEGER NOT NULL,
-  latencyMs INTEGER NOT NULL
+  latencyMs INTEGER NOT NULL,
+  inputTokens INTEGER,
+  cacheHitTokens INTEGER,
+  cacheMissTokens INTEGER,
+  outputTokens INTEGER,
+  reasoningTokens INTEGER,
+  sessionId TEXT,
+  usageSource TEXT
 );
 
 CREATE TABLE IF NOT EXISTS auth_codes (
@@ -87,7 +99,7 @@ CREATE TABLE IF NOT EXISTS site_views (
 );
 `
 
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })
@@ -108,6 +120,22 @@ export function openDatabase(dbPath: string): GatewayDatabase {
  * are preserved so existing tokens and usage rows keep pointing at the same
  * user; token-issued users become token identities.
  */
+function addTokenColumns(db: GatewayDatabase): void {
+  const columns = (db.prepare('PRAGMA table_info(usage)').all() as { name: string }[]).map((row) => row.name)
+  const additions: [string, string][] = [
+    ['inputTokens', 'INTEGER'],
+    ['cacheHitTokens', 'INTEGER'],
+    ['cacheMissTokens', 'INTEGER'],
+    ['outputTokens', 'INTEGER'],
+    ['reasoningTokens', 'INTEGER'],
+    ['sessionId', 'TEXT'],
+    ['usageSource', 'TEXT'],
+  ]
+  for (const [name, type] of additions) {
+    if (!columns.includes(name)) db.exec(`ALTER TABLE usage ADD COLUMN ${name} ${type}`)
+  }
+}
+
 function migrate(db: GatewayDatabase): void {
   const users = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get()
   const fresh = users === undefined
@@ -119,6 +147,7 @@ function migrate(db: GatewayDatabase): void {
   const legacy = columns.some((column) => column.name === 'provider')
   if (!legacy) {
     db.exec(SCHEMA)
+    addTokenColumns(db)
     return
   }
 

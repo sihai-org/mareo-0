@@ -176,6 +176,11 @@ async function handleRequest(
       completionChars: outcome.completionChars,
       status: outcome.status,
       latencyMs: outcome.latencyMs,
+      tokens: outcome.tokens,
+      sessionId: outcome.sessionId,
+      // A 200 whose usage we did not capture is recorded as missing, never as
+      // zero: an unaccounted request must not look free.
+      usageSource: outcome.status === 200 ? (outcome.tokens === undefined ? 'missing' : 'provider') : undefined,
     })
   } catch {
     // Usage accounting must never break a successful proxy exchange.

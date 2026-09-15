@@ -14,6 +14,7 @@
     "issue-token": "npm run build && node --env-file-if-exists=.env dist/src/issue-token.js",
     "metrics": "npm run build && node --env-file-if-exists=.env dist/src/metrics.js",
     "stats:page": "npm run build && node --env-file-if-exists=.env dist/src/stats-page.js",
+    "cost": "npm run build && node --env-file-if-exists=.env dist/src/cost-report.js",
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "devDependencies": {

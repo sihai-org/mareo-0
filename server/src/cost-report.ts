@@ -1,0 +1,268 @@
+// The cost report. Every number here comes from token counts the provider
+// reported; byte counts are never used to price anything.
+//
+//   npm run cost                          # 按北京日的每日报表
+//   npm run cost -- --bill 2026-09-16=57.69   # 与账单对账（可重复传入）
+//
+// Reconciliation is not optional decoration: when a bill is given, the report
+// prints our total next to it and flags the deviation, so a wrong number is
+// visible instead of plausible.
+import { openDatabase, type GatewayDatabase } from './db.js'
+import { costOf, type TokenUsage } from './pricing.js'
+
+const dbPath = process.env.DB_PATH ?? 'data/mareo.db'
+const BEIJING_OFFSET_MS = 8 * 3600 * 1000
+
+interface Row {
+  userId: string
+  ts: string
+  model: string | null
+  status: number
+  inputTokens: number | null
+  cacheHitTokens: number | null
+  cacheMissTokens: number | null
+  outputTokens: number | null
+  reasoningTokens: number | null
+  sessionId: string | null
+  usageSource: string | null
+}
+
+/** The Beijing calendar day a timestamp belongs to. */
+export function dayOf(ts: string): string {
+  return new Date(new Date(ts).getTime() + BEIJING_OFFSET_MS).toISOString().slice(0, 10)
+}
+
+export function tokensOf(row: Row): TokenUsage | undefined {
+  if (row.usageSource !== 'provider' || row.outputTokens === null) return undefined
+  return {
+    inputTokens: row.inputTokens ?? 0,
+    cacheHitTokens: row.cacheHitTokens ?? 0,
+    cacheMissTokens: row.cacheMissTokens ?? 0,
+    outputTokens: row.outputTokens,
+    reasoningTokens: row.reasoningTokens ?? 0,
+  }
+}
+
+export interface DaySummary {
+  day: string
+  requests: number
+  pricedRequests: number
+  /** 200s whose usage we failed to capture — a real accounting gap. */
+  missingUsage: number
+  /** Rows recorded before token capture existed: not a failure, just unpriceable. */
+  legacyRequests: number
+  cost: number
+  unknownModelCost: number
+  outputTokens: number
+  reasoningTokens: number
+  inputTokens: number
+  cacheHitTokens: number
+  unpricedModels: string[]
+}
+
+export function summarizeDays(rows: Row[]): Map<string, DaySummary> {
+  const days = new Map<string, DaySummary>()
+  for (const row of rows) {
+    const day = dayOf(row.ts)
+    if (!days.has(day)) {
+      days.set(day, {
+        day,
+        requests: 0,
+        pricedRequests: 0,
+        missingUsage: 0,
+        legacyRequests: 0,
+        cost: 0,
+        unknownModelCost: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        inputTokens: 0,
+        cacheHitTokens: 0,
+        unpricedModels: [],
+      })
+    }
+    const summary = days.get(day)!
+    summary.requests += 1
+    if (row.status !== 200) continue
+    const tokens = tokensOf(row)
+    if (tokens === undefined) {
+      // Distinguish "we failed to capture this" from "recorded before capture
+      // existed": the first is a defect, the second is history.
+      if (row.usageSource === 'missing') summary.missingUsage += 1
+      else summary.legacyRequests += 1
+      continue
+    }
+    const at = new Date(row.ts)
+    const cost = costOf(tokens, row.model, at)
+    if (cost === undefined) {
+      // Unknown model: count it separately so it cannot silently look free.
+      if (row.model !== null && !summary.unpricedModels.includes(row.model)) summary.unpricedModels.push(row.model)
+      continue
+    }
+    summary.pricedRequests += 1
+    summary.cost += cost
+    summary.outputTokens += tokens.outputTokens
+    summary.reasoningTokens += tokens.reasoningTokens
+    summary.inputTokens += tokens.inputTokens
+    summary.cacheHitTokens += tokens.cacheHitTokens
+  }
+  return days
+}
+
+/** Per-user cost for one day, highest first. */
+export function perUserCost(rows: Row[], day: string): { userId: string; requests: number; cost: number; hitRate: number | undefined }[] {
+  const users = new Map<string, { requests: number; cost: number; input: number; hit: number }>()
+  for (const row of rows) {
+    if (dayOf(row.ts) !== day || row.status !== 200) continue
+    const tokens = tokensOf(row)
+    if (tokens === undefined) continue
+    const cost = costOf(tokens, row.model, new Date(row.ts))
+    if (cost === undefined) continue
+    if (!users.has(row.userId)) users.set(row.userId, { requests: 0, cost: 0, input: 0, hit: 0 })
+    const entry = users.get(row.userId)!
+    entry.requests += 1
+    entry.cost += cost
+    entry.input += tokens.inputTokens
+    entry.hit += tokens.cacheHitTokens
+  }
+  return [...users]
+    .map(([userId, entry]) => ({
+      userId,
+      requests: entry.requests,
+      cost: entry.cost,
+      hitRate: entry.input === 0 ? undefined : entry.hit / entry.input,
+    }))
+    .sort((left, right) => right.cost - left.cost)
+}
+
+/** Cost per harness session for one day, highest first. */
+export function perSessionCost(rows: Row[], day: string): { sessionId: string; requests: number; cost: number }[] {
+  const sessions = new Map<string, { requests: number; cost: number }>()
+  for (const row of rows) {
+    if (dayOf(row.ts) !== day || row.status !== 200) continue
+    const tokens = tokensOf(row)
+    if (tokens === undefined) continue
+    const cost = costOf(tokens, row.model, new Date(row.ts))
+    if (cost === undefined) continue
+    const key = row.sessionId ?? '(无 session)'
+    if (!sessions.has(key)) sessions.set(key, { requests: 0, cost: 0 })
+    const entry = sessions.get(key)!
+    entry.requests += 1
+    entry.cost += cost
+  }
+  return [...sessions].map(([sessionId, entry]) => ({ sessionId, ...entry })).sort((left, right) => right.cost - left.cost)
+}
+
+/** Percentile of a sorted-ascending list, using nearest-rank. */
+export function percentile(sorted: number[], fraction: number): number {
+  if (sorted.length === 0) return 0
+  const index = Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)
+  return sorted[Math.max(0, index)]
+}
+
+export function parseBillArguments(argv: string[]): Map<string, number> {
+  const bills = new Map<string, number>()
+  for (const [index, argument] of argv.entries()) {
+    if (argument !== '--bill') continue
+    const value = argv[index + 1]
+    const match = /^(\d{4}-\d{2}-\d{2})=([0-9.]+)$/.exec(value ?? '')
+    if (match === null) {
+      throw new Error(`--bill 需要 <北京日>=<元> 形式，例如 --bill 2026-09-14=57.69（收到 ${value ?? ''}）`)
+    }
+    bills.set(match[1], Number.parseFloat(match[2]))
+  }
+  return bills
+}
+
+function money(value: number): string {
+  return `¥${value.toFixed(2)}`
+}
+
+function loadRows(db: GatewayDatabase): Row[] {
+  return db
+    .prepare(
+      `SELECT userId, ts, model, status, inputTokens, cacheHitTokens, cacheMissTokens,
+              outputTokens, reasoningTokens, sessionId, usageSource
+       FROM usage ORDER BY id`,
+    )
+    .all() as unknown as Row[]
+}
+
+function main(): void {
+  const argv = process.argv.slice(2)
+  const bills = parseBillArguments(argv)
+  const dayArgument = argv.find((argument) => /^\d{4}-\d{2}-\d{2}$/.test(argument))
+  const db = openDatabase(dbPath)
+  const rows = loadRows(db)
+  const days = summarizeDays(rows)
+
+  console.log('# Mareo 成本报表（数据源：上游返回的 usage token，单价为官方人民币价）\n')
+  if (days.size === 0) {
+    console.log('暂无数据。')
+    return
+  }
+
+  console.log('日期(北京)   请求  有token  缺usage   历史   输出tok   思考tok   输入tok  命中率   成本      账单      偏差')
+  for (const day of [...days.keys()].sort()) {
+    const summary = days.get(day)!
+    const hitRate = summary.inputTokens === 0 ? '—' : `${((summary.cacheHitTokens / summary.inputTokens) * 100).toFixed(1)}%`
+    const bill = bills.get(day)
+    const billText = bill === undefined ? '—' : money(bill)
+    // A day that still holds pre-capture rows cannot be reconciled: its cost is
+    // partial, so a deviation would be a lie.
+    const partial = summary.legacyRequests > 0
+    const deviation =
+      bill === undefined || summary.cost === 0 || partial ? '—' : `${(((summary.cost - bill) / bill) * 100).toFixed(1)}%`
+    console.log(
+      day.padEnd(13) +
+        String(summary.requests).padStart(5) +
+        String(summary.pricedRequests).padStart(9) +
+        String(summary.missingUsage).padStart(9) +
+        String(summary.legacyRequests).padStart(7) +
+        String(summary.outputTokens.toLocaleString('en-US')).padStart(11) +
+        String(summary.reasoningTokens.toLocaleString('en-US')).padStart(11) +
+        String(summary.inputTokens.toLocaleString('en-US')).padStart(10) +
+        hitRate.padStart(8) +
+        money(summary.cost).padStart(10) +
+        billText.padStart(10) +
+        deviation.padStart(9),
+    )
+    if (summary.unpricedModels.length > 0) {
+      console.log(`              ⚠ 无价目表的模型（成本未计入）：${summary.unpricedModels.join(', ')}`)
+    }
+    if (summary.missingUsage > 0) {
+      console.log(`              ⚠ ${summary.missingUsage} 次请求未拿到 usage（流被中断等），其成本未计入`)
+    }
+    if (partial) {
+      console.log(`              ℹ ${summary.legacyRequests} 次请求早于 token 采集，无法计价——该日成本不完整，故不对账`)
+    }
+  }
+
+  const target = dayArgument ?? [...days.keys()].sort().at(-1)!
+  const users = perUserCost(rows, target)
+  if (users.length > 0) {
+    const costs = users.map((entry) => entry.cost).sort((left, right) => left - right)
+    const total = users.reduce((sum, entry) => sum + entry.cost, 0)
+    console.log(`\n## ${target} 每用户成本（当日有请求的账户 ${users.length} 个）`)
+    console.log(`  人均 ${money(total / users.length)} | P50 ${money(percentile(costs, 0.5))} | P90 ${money(percentile(costs, 0.9))} | P99 ${money(percentile(costs, 0.99))} | 最高 ${money(costs.at(-1) ?? 0)}`)
+    for (const entry of users.slice(0, 10)) {
+      const hit = entry.hitRate === undefined ? '—' : `${(entry.hitRate * 100).toFixed(1)}%`
+      console.log(`    ${entry.userId.slice(0, 8)}  ${String(entry.requests).padStart(5)} 次  命中率 ${hit.padStart(6)}  ${money(entry.cost)}`)
+    }
+
+    const sessions = perSessionCost(rows, target).filter((entry) => entry.sessionId !== '(无 session)')
+    if (sessions.length > 0) {
+      const sessionCosts = sessions.map((entry) => entry.cost).sort((left, right) => left - right)
+      console.log(`\n## ${target} 每 session 成本（${sessions.length} 个会话）`)
+      console.log(`  P50 ${money(percentile(sessionCosts, 0.5))} | P90 ${money(percentile(sessionCosts, 0.9))} | 最高 ${money(sessionCosts.at(-1) ?? 0)}`)
+      for (const entry of sessions.slice(0, 5)) {
+        console.log(`    ${entry.sessionId.slice(0, 12)}  ${String(entry.requests).padStart(5)} 次  ${money(entry.cost)}`)
+      }
+    } else {
+      console.log('\n## 每 session 成本：暂无数据（客户端未上报 session 头）')
+    }
+  }
+}
+
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  main()
+}
