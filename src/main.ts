@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -26,8 +26,10 @@ import { claimUpdatePrompt } from './update-prompt.js'
 import { loadPreferences, savePreferences, type Preferences } from './preferences.js'
 import { readSessionTitles, unreportedTitles } from './session-titles.js'
 import { stripLocalPaths, Telemetry, type TelemetryEvent } from './telemetry.js'
+import { SponsoredAdClient } from './sponsored-ad.js'
 
 let mainWindow: BrowserWindow | undefined
+let sponsoredAd: SponsoredAdClient | undefined
 let dshRuntime: DshRuntime | undefined
 let shutdownComplete = false
 // The signed-in account for the current run; used by the account bridge.
@@ -100,6 +102,7 @@ if (squirrelAction !== undefined) {
 
   app.whenReady().then(async () => {
     registerAccountBridge()
+    registerSponsoredAdBridge()
     await startMareo()
   }).catch(showFatalError)
 
@@ -224,6 +227,11 @@ async function startMareo(): Promise<void> {
     mainWindow?.setTitle('Mareo')
   })
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) {
+      sponsoredAd = new SponsoredAdClient(GATEWAY_URL, account.token, (url) => shell.openExternal(url))
+    }
+  })
   await mainWindow.loadFile(path.join(app.getAppPath(), 'assets', 'startup.html'))
 
   while (mainWindow && !mainWindow.isDestroyed()) {
@@ -563,6 +571,7 @@ function registerAccountBridge(): void {
 /** Tears down the running session and shows the sign-in window again. */
 async function returnToSignIn(): Promise<void> {
   signInActive = true
+  sponsoredAd = undefined
   if (dshRuntime) {
     const runtime = dshRuntime
     dshRuntime = undefined
@@ -589,6 +598,25 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
       // Invalid and unsupported links stay closed.
     }
     return { action: 'deny' }
+  })
+}
+
+function isSponsoredAdSender(event: IpcMainInvokeEvent): boolean {
+  if (!currentAccount || !mainWindow || mainWindow.isDestroyed() || !dshRuntime ||
+      event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) return false
+  try {
+    return new URL(event.senderFrame.url).origin === dshRuntime.origin
+  } catch { return false }
+}
+
+function registerSponsoredAdBridge(): void {
+  ipcMain.handle('mareo:ad:get', (event) => isSponsoredAdSender(event) ? sponsoredAd?.load() ?? null : null)
+  ipcMain.handle('mareo:ad:impression', (event, adId: unknown) => {
+    if (isSponsoredAdSender(event) && mainWindow?.isFocused() && !mainWindow.isMinimized()) sponsoredAd?.impression(adId)
+  })
+  ipcMain.handle('mareo:ad:click', (event, adId: unknown) => {
+    if (!isSponsoredAdSender(event) || !mainWindow?.isFocused()) return false
+    return sponsoredAd?.click(adId) ?? false
   })
 }
 

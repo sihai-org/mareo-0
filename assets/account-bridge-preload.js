@@ -4,6 +4,12 @@
 // renderer never sees credentials.
 const { contextBridge, ipcRenderer } = require('electron')
 
+contextBridge.exposeInMainWorld('__mareoSponsoredAd', {
+  get: () => ipcRenderer.invoke('mareo:ad:get'),
+  impression: (adId) => ipcRenderer.invoke('mareo:ad:impression', adId),
+  click: (adId) => ipcRenderer.invoke('mareo:ad:click', adId),
+})
+
 contextBridge.exposeInMainWorld('__mareoAccount', {
   getProfile: () => ipcRenderer.invoke('mareo:account:get'),
   updateName: (displayName) => ipcRenderer.invoke('mareo:account:update-name', displayName),

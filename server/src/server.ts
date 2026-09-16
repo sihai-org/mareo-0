@@ -9,11 +9,13 @@ import { parseSessionTitleDetail, recordSessionTitle } from './session-titles.js
 import { parseSiteView, recordSiteView } from './site-views.js'
 import { startOfDay } from './clock.js'
 import { countRequestsSince, recordUsage } from './usage.js'
+import { readSponsoredAd, recordAdEvent } from './sponsored-ad.js'
 
 export interface GatewayOptions extends ProxyConfig {
   db: GatewayDatabase
   /** Per-user daily request cap; 0 disables the check. */
   dailyLimit: number
+  sponsoredAdFile?: string
   /**
    * Requests in one day above which an account deserves a look. This only warns
    * (log line + the operations page); it never blocks, which is what keeps the
@@ -53,6 +55,27 @@ async function handleRequest(
 
   if (request.method === 'GET' && pathname === '/health') {
     sendJson(response, 200, { ok: true })
+    return
+  }
+
+  // Keep this namespace out of the catch-all model proxy and its daily quota.
+  if (pathname === '/sponsored-ad' || pathname.startsWith('/sponsored-ad/')) {
+    response.setHeader('cache-control', 'no-store')
+    const owner = authenticate(request, options.db)
+    if (!owner) {
+      sendJson(response, 401, { error: 'invalid token' })
+      return
+    }
+    if (pathname === '/sponsored-ad' && request.method === 'GET') {
+      sendJson(response, 200, { ad: await readSponsoredAd(options.sponsoredAdFile ?? 'data/sponsored-ad.json') })
+    } else if (pathname === '/sponsored-ad/events' && request.method === 'POST') {
+      const body = await readJsonBody(request, 2048)
+      const ad = await readSponsoredAd(options.sponsoredAdFile ?? 'data/sponsored-ad.json')
+      const status = recordAdEvent(options.db, owner.userId, body, ad)
+      sendJson(response, status, { ok: status === 200 })
+    } else {
+      sendJson(response, 404, { error: 'not found' })
+    }
     return
   }
 

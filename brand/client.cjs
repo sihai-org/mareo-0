@@ -39,6 +39,76 @@ function Attribution() {
   }, 'Built on DeepSeek Harness')
 }
 
+function SponsoredAdSlot({ wide }) {
+  const [ad, setAd] = React.useState(null)
+  const [loaded, setLoaded] = React.useState(false)
+  const card = React.useRef(null)
+
+  React.useEffect(() => {
+    let active = true
+    window.__mareoSponsoredAd.get().then((value) => {
+      if (active) setAd(value)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  React.useEffect(() => {
+    if (!ad || !loaded || !wide || !card.current) return
+    let visible = false
+    let timer
+    const update = () => {
+      clearTimeout(timer)
+      if (visible && document.visibilityState === 'visible' && document.hasFocus()) {
+        timer = setTimeout(() => {
+          void window.__mareoSponsoredAd.impression(ad.id).catch(() => {})
+        }, 1000)
+      }
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting && entry.intersectionRatio >= 0.5
+      update()
+    }, { threshold: [0, 0.5] })
+    observer.observe(card.current)
+    document.addEventListener('visibilitychange', update)
+    window.addEventListener('focus', update)
+    window.addEventListener('blur', update)
+    return () => {
+      clearTimeout(timer)
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', update)
+      window.removeEventListener('focus', update)
+      window.removeEventListener('blur', update)
+    }
+  }, [ad, loaded, wide])
+
+  // The image loads while hidden; no empty card, skeleton or error is shown.
+  if (!ad || !wide) return null
+  return React.createElement('button', {
+    ref: card, type: 'button',
+    'aria-label': `广告 / Sponsored · ${ad.advertiser} · ${ad.title}`,
+    onClick: () => { void window.__mareoSponsoredAd.click(ad.id).catch(() => {}) },
+    style: {
+      display: loaded ? 'flex' : 'none', flexDirection: 'column', gap: 8,
+      width: '100%', minWidth: 0, margin: '4px 0 10px', padding: 10,
+      textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit',
+      background: 'var(--dsw-alias-bg-base, #fff)',
+      border: '1px solid var(--dsw-alias-border-l3, #d0d5dd)', borderRadius: 10,
+    },
+  },
+  React.createElement('span', { style: { fontSize: 12, opacity: 0.7 } }, '广告 / Sponsored'),
+  React.createElement('img', {
+    src: ad.image, alt: '', referrerPolicy: 'no-referrer', crossOrigin: 'anonymous',
+    onLoad: () => setLoaded(true), onError: () => { setLoaded(false); setAd(null) },
+    style: { width: '100%', height: 80, objectFit: 'cover', borderRadius: 6 },
+  }),
+  React.createElement('span', { style: { fontSize: 14, fontWeight: 600, lineHeight: 1.4,
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' } }, ad.title),
+  React.createElement('span', { style: { fontSize: 12, lineHeight: 1.5, opacity: 0.8,
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' } }, ad.description),
+  React.createElement('span', { style: { fontSize: 12, opacity: 0.65, maxWidth: '100%',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ad.advertiser))
+}
+
 // "Account" settings page. The official settings shell owns navigation and
 // layout; this page talks to the Mareo host through the __mareoAccount bridge
 // (exposed by Electron's preload), never to the gateway directly.
@@ -140,7 +210,7 @@ function AccountSection() {
         '发送匿名使用统计',
       ),
       React.createElement('span', { style: { opacity: 0.7, fontSize: 13, lineHeight: 1.7 } },
-        '仅包含版本、平台、启动与登录结果、异常退出，不含任何对话内容。关闭后立即停止上报。',
+        '仅包含版本、平台、启动与登录结果、异常退出，不含任何对话内容。关闭后立即停止诊断统计上报。广告展示与点击统计独立记录，并关联你的用户 ID，不受此开关控制。',
       ),
     ),
     React.createElement('div', { style: { display: 'flex', gap: 10 } },
@@ -166,6 +236,11 @@ exports.apply = (ctx) => {
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'mareo-attribution' }, Attribution))
+  if (typeof window !== 'undefined' && window.__mareoSponsoredAd) {
+    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+      name: 'sidebar.footer.action', id: 'mareo-sponsored-ad',
+    }, SponsoredAdSlot))
+  }
   if (typeof window !== 'undefined' && window.__mareoAccount) {
     ctx.slots.inject('settings.section', () => ctx.slots.register({
       name: 'settings.section',

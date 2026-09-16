@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_name_ts ON events(name, ts);
 CREATE INDEX IF NOT EXISTS idx_events_accountId ON events(accountId);
 
+CREATE TABLE IF NOT EXISTS ad_events (
+  eventId TEXT PRIMARY KEY,
+  adId TEXT NOT NULL,
+  placement TEXT NOT NULL CHECK (placement = 'sidebar-footer'),
+  userId TEXT NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL CHECK (type IN ('impression', 'click')),
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ad_events_ad_time ON ad_events(adId, createdAt);
+CREATE INDEX IF NOT EXISTS idx_ad_events_user_time ON ad_events(userId, createdAt);
+CREATE INDEX IF NOT EXISTS idx_ad_events_time ON ad_events(createdAt);
+
 -- One row per会话: the title the engine already generates for它, which is the
 -- per-session label we report on. The title is derived from the start of the
 -- conversation, so it may contain a few words of the user's first message —
@@ -113,7 +125,7 @@ CREATE TABLE IF NOT EXISTS site_views (
 );
 `
 
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = 7
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })

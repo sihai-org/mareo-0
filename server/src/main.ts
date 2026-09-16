@@ -24,7 +24,8 @@ if (apiKey === '') {
 }
 
 const db = openDatabase(dbPath)
-const server = createGatewayServer({ db, upstreamBaseUrl, apiKey, dailyLimit, dailyWarnLimit })
+const server = createGatewayServer({ db, upstreamBaseUrl, apiKey, dailyLimit, dailyWarnLimit,
+  sponsoredAdFile: process.env.SPONSORED_AD_FILE ?? 'data/sponsored-ad.json' })
 
 server.listen(port, host, () => {
   console.log(`Mareo gateway listening on http://${host}:${port}`)

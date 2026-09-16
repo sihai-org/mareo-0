@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "id": "mareo-promo-001",
+  "image": "https://images.example.com/banner.png",
+  "title": "推荐标题",
+  "description": "简短介绍",
+  "targetUrl": "https://example.com/",
+  "advertiser": "广告主名称"
+}

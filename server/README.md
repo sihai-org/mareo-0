@@ -63,6 +63,13 @@ The suite runs the gateway against a local stub upstream, so it never needs a
 real DeepSeek key: auth rejection, `/me`, JSON proxying, streaming, usage
 accounting, and the daily limit are all exercised offline.
 
+## Sponsored Ad Slot
+
+Optional manual sponsored content and account-linked impression/click events use
+separate `/sponsored-ad` endpoints and the `ad_events` table. No ad is shown by
+default. Configuration, privacy boundaries, counting rules and rollout order:
+[`../docs/sponsored-ad.md`](../docs/sponsored-ad.md).
+
 ## Deploy
 
 Run the same code on a server (for example an Aliyun ECS instance) behind HTTPS.
