@@ -10,6 +10,9 @@ import { parseSiteView, recordSiteView } from './site-views.js'
 import { startOfDay } from './clock.js'
 import { countRequestsSince, recordUsage } from './usage.js'
 import { readSponsoredAd, recordAdEvent } from './sponsored-ad.js'
+import { readSettings, type Settings } from './settings.js'
+import { quotaState } from './quota.js'
+import { completeRewardTask, rewardOfferFor, startRewardTask } from './rewards.js'
 
 export interface GatewayOptions extends ProxyConfig {
   db: GatewayDatabase
@@ -133,6 +136,48 @@ async function handleRequest(
     return
   }
 
+  // Quota meter and reward tasks. Their own namespace, so asking about today's
+  // allowance never touches the model proxy or costs anything.
+  if (pathname === '/quota' || pathname.startsWith('/reward/')) {
+    response.setHeader('cache-control', 'no-store')
+    const owner = authenticate(request, options.db)
+    if (!owner) {
+      sendJson(response, 401, { error: 'invalid token' })
+      return
+    }
+    const settings = readSettings(options.db)
+
+    if (request.method === 'GET' && pathname === '/quota') {
+      sendJson(response, 200, quotaPayload(options.db, owner.userId, settings))
+      return
+    }
+
+    if (request.method === 'POST' && pathname === '/reward/start') {
+      const task = startRewardTask(options.db, owner.userId, settings)
+      // No offer is a normal answer: rewards may simply not be open to this
+      // account, or today's ceiling is already reached.
+      sendJson(response, task === null ? 429 : 200, task === null ? { error: 'reward-unavailable' } : { task })
+      return
+    }
+
+    if (request.method === 'POST' && pathname === '/reward/complete') {
+      const body = await readJsonBody(request, 1024)
+      const result = completeRewardTask(options.db, owner.userId, body?.taskId, settings)
+      if (!result.ok) {
+        const malformed = result.reason === 'unknown-task' || result.reason === 'provider-mismatch'
+        sendJson(response, malformed ? 400 : 409, { error: result.reason })
+        return
+      }
+      // The answer carries the refreshed meter so the client does not need a
+      // second round trip to redraw it.
+      sendJson(response, 200, { ok: true, amountMicro: result.amountMicro, duplicated: result.duplicated, ...quotaPayload(options.db, owner.userId, settings) })
+      return
+    }
+
+    sendJson(response, 404, { error: 'not found' })
+    return
+  }
+
   if (pathname === '/auth/providers') {
     sendJson(response, 200, { providers: ['email'] })
     return
@@ -189,6 +234,34 @@ async function handleRequest(
       message: `今天的用量额度已用完，北京时间 0 点后自动恢复。如需提高额度请联系我们。`,
     })
     return
+  }
+
+  // The product quota, measured in money rather than requests. Reading the
+  // settings here keeps every number operator-tunable without a redeploy, and
+  // `off` (the default) leaves this request path byte-for-byte as it was.
+  const settings = readSettings(options.db)
+  if (settings.quotaMode === 'enforce') {
+    const quota = quotaState(options.db, owner.userId, settings)
+    if (quota.exhausted) {
+      try {
+        recordUsage(options.db, {
+          userId: owner.userId,
+          model: null,
+          promptChars: 0,
+          completionChars: 0,
+          status: 429,
+          latencyMs: 0,
+        })
+      } catch {
+        // Recording the rejection must not change the rejection itself.
+      }
+      sendJson(response, 429, {
+        error: 'quota-exhausted',
+        message: '今天的免费额度已用完，北京时间 0 点后自动恢复。',
+        ...quotaPayload(options.db, owner.userId, settings),
+      })
+      return
+    }
   }
 
   const outcome = await proxyRequest(request, response, options)
@@ -336,6 +409,38 @@ async function handleEmailVerify(options: GatewayOptions, request: IncomingMessa
 
 function displayNameForEmail(email: string): string {
   return email.split('@')[0].slice(0, 32) || 'Mareo 用户'
+}
+
+/**
+ * The meter, as the client draws it. It carries the percentage the UI shows and
+ * the amounts the tests assert on; the client never does money arithmetic and
+ * never displays the amounts to the user.
+ */
+function quotaPayload(db: GatewayDatabase, accountId: string, settings: Settings): {
+  quota: {
+    limitMicro: number
+    spentMicro: number
+    remainingMicro: number
+    usedPercent: number
+    exhausted: boolean
+    resetAt: string
+    visible: boolean
+  }
+  reward: ReturnType<typeof rewardOfferFor>
+} {
+  const state = quotaState(db, accountId, settings)
+  return {
+    quota: {
+      limitMicro: state.limitMicro,
+      spentMicro: state.spentMicro,
+      remainingMicro: state.remainingMicro,
+      usedPercent: state.limitMicro > 0 ? Math.min(100, Math.round((state.spentMicro / state.limitMicro) * 100)) : 100,
+      exhausted: state.exhausted,
+      resetAt: state.resetAt,
+      visible: state.visible,
+    },
+    reward: rewardOfferFor(db, accountId, settings),
+  }
 }
 
 async function readJsonBody(request: IncomingMessage, maxBytes = 16 * 1024): Promise<Record<string, unknown> | undefined> {

@@ -10,11 +10,12 @@
 import { openDatabase, type GatewayDatabase } from './db.js'
 import { costOf, type TokenUsage } from './pricing.js'
 import { CATEGORY_LABELS, classifyTitle, type WorkCategory } from './session-labels.js'
+import { readSettings } from './settings.js'
 
 const dbPath = process.env.DB_PATH ?? 'data/mareo.db'
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000
 
-interface Row {
+export interface Row {
   userId: string
   ts: string
   model: string | null
@@ -219,6 +220,50 @@ function loadRows(db: GatewayDatabase): Row[] {
     .all() as unknown as Row[]
 }
 
+/**
+ * What a daily quota of `thresholdMicro` would have done on that day: how many
+ * accounts it would have stopped, and how much of the day's traffic sits beyond
+ * the line. Computed from the same priced rows as everything else, so the shadow
+ * numbers cannot drift from the money numbers.
+ */
+export function quotaImpact(
+  rows: Row[],
+  day: string,
+  thresholdMicro: number,
+): { accounts: number; blockedAccounts: number; blockedRequests: number; requests: number; costBeyondMicro: number } {
+  const perAccount = new Map<string, number[]>()
+  for (const row of rows) {
+    if (dayOf(row.ts) !== day) continue
+    const tokens = tokensOf(row)
+    if (tokens === undefined) continue
+    const cost = costOf(tokens, row.model, new Date(row.ts))
+    if (cost === undefined) continue
+    const costs = perAccount.get(row.userId) ?? []
+    costs.push(Math.round(cost * 1_000_000))
+    perAccount.set(row.userId, costs)
+  }
+
+  let blockedAccounts = 0
+  let blockedRequests = 0
+  let requests = 0
+  let costBeyondMicro = 0
+  for (const costs of perAccount.values()) {
+    requests += costs.length
+    let cumulative = 0
+    for (const micro of costs) {
+      // The request that starts with quota left is allowed to overrun it; the
+      // next one is the first the user cannot make.
+      if (cumulative >= thresholdMicro) {
+        blockedRequests += 1
+        costBeyondMicro += micro
+      }
+      cumulative += micro
+    }
+    if (cumulative > thresholdMicro) blockedAccounts += 1
+  }
+  return { accounts: perAccount.size, blockedAccounts, blockedRequests, requests, costBeyondMicro }
+}
+
 function main(): void {
   const argv = process.argv.slice(2)
   const bills = parseBillArguments(argv)
@@ -279,6 +324,27 @@ function main(): void {
     for (const entry of users.slice(0, 10)) {
       const hit = entry.hitRate === undefined ? '—' : `${(entry.hitRate * 100).toFixed(1)}%`
       console.log(`    ${entry.userId.slice(0, 8)}  ${String(entry.requests).padStart(5)} 次  命中率 ${hit.padStart(6)}  ${money(entry.cost)}`)
+    }
+
+    // Shadow mode has no runtime state: what a quota would have done is derived
+    // from the same rows that priced the day, so the numbers below are exactly
+    // the ones enforcement would later apply.
+    const settings = readSettings(db)
+    const thresholds = [...new Set([settings.dailyFreeMicro, 3_000_000, 5_000_000, 10_000_000])].sort((left, right) => left - right)
+    console.log(`\n## ${target} 额度影响（影子估算，0 点重置；当前每日免费额度 ${money(settings.dailyFreeMicro / 1_000_000)}，模式 ${settings.quotaMode}）`)
+    console.log('  阈值        会被挡账号   会被挡请求   占总请求   超出阈值的成本')
+    for (const threshold of thresholds) {
+      const impact = quotaImpact(rows, target, threshold)
+      const share = impact.requests === 0 ? '—' : `${((impact.blockedRequests / impact.requests) * 100).toFixed(1)}%`
+      const current = threshold === settings.dailyFreeMicro ? '  ← 当前配置' : ''
+      console.log(
+        money(threshold / 1_000_000).padStart(8) +
+          `${impact.blockedAccounts}/${impact.accounts}`.padStart(13) +
+          String(impact.blockedRequests).padStart(13) +
+          share.padStart(11) +
+          money(impact.costBeyondMicro / 1_000_000).padStart(15) +
+          current,
+      )
     }
 
     const sessions = perSessionCost(rows, target).filter((entry) => entry.sessionId !== '(无 session)')

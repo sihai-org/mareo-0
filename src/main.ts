@@ -27,9 +27,11 @@ import { loadPreferences, savePreferences, type Preferences } from './preference
 import { readSessionTitles, unreportedTitles } from './session-titles.js'
 import { stripLocalPaths, Telemetry, type TelemetryEvent } from './telemetry.js'
 import { SponsoredAdClient } from './sponsored-ad.js'
+import { QuotaClient } from './quota.js'
 
 let mainWindow: BrowserWindow | undefined
 let sponsoredAd: SponsoredAdClient | undefined
+let quotaClient: QuotaClient | undefined
 let dshRuntime: DshRuntime | undefined
 let shutdownComplete = false
 // The signed-in account for the current run; used by the account bridge.
@@ -102,7 +104,7 @@ if (squirrelAction !== undefined) {
 
   app.whenReady().then(async () => {
     registerAccountBridge()
-    registerSponsoredAdBridge()
+    registerContentBridges()
     await startMareo()
   }).catch(showFatalError)
 
@@ -229,7 +231,10 @@ async function startMareo(): Promise<void> {
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   mainWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) {
+      // A fresh document gets fresh gateway state: the ad configured now, and
+      // the quota that was spent while the previous document was open.
       sponsoredAd = new SponsoredAdClient(GATEWAY_URL, account.token, (url) => shell.openExternal(url))
+      quotaClient = new QuotaClient(GATEWAY_URL, account.token)
     }
   })
   await mainWindow.loadFile(path.join(app.getAppPath(), 'assets', 'startup.html'))
@@ -572,6 +577,7 @@ function registerAccountBridge(): void {
 async function returnToSignIn(): Promise<void> {
   signInActive = true
   sponsoredAd = undefined
+  quotaClient = undefined
   if (dshRuntime) {
     const runtime = dshRuntime
     dshRuntime = undefined
@@ -601,7 +607,8 @@ function secureDshWindow(window: BrowserWindow, allowedOrigin: string): void {
   })
 }
 
-function isSponsoredAdSender(event: IpcMainInvokeEvent): boolean {
+/** Only the signed-in DSH document may use the bridges below. */
+function isDshSender(event: IpcMainInvokeEvent): boolean {
   if (!currentAccount || !mainWindow || mainWindow.isDestroyed() || !dshRuntime ||
       event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) return false
   try {
@@ -609,15 +616,19 @@ function isSponsoredAdSender(event: IpcMainInvokeEvent): boolean {
   } catch { return false }
 }
 
-function registerSponsoredAdBridge(): void {
-  ipcMain.handle('mareo:ad:get', (event) => isSponsoredAdSender(event) ? sponsoredAd?.load() ?? null : null)
+function registerContentBridges(): void {
+  ipcMain.handle('mareo:ad:get', (event) => isDshSender(event) ? sponsoredAd?.load() ?? null : null)
   ipcMain.handle('mareo:ad:impression', (event, adId: unknown) => {
-    if (isSponsoredAdSender(event) && mainWindow?.isFocused() && !mainWindow.isMinimized()) sponsoredAd?.impression(adId)
+    if (isDshSender(event) && mainWindow?.isFocused() && !mainWindow.isMinimized()) sponsoredAd?.impression(adId)
   })
   ipcMain.handle('mareo:ad:click', (event, adId: unknown) => {
-    if (!isSponsoredAdSender(event) || !mainWindow?.isFocused()) return false
+    if (!isDshSender(event) || !mainWindow?.isFocused()) return false
     return sponsoredAd?.click(adId) ?? false
   })
+  // The quota meter is read-only for the user: it reports what the gateway says
+  // and nothing else. Earning extra quota exists server-side, but has no
+  // user-facing entry until a real provider is connected.
+  ipcMain.handle('mareo:quota:get', (event) => isDshSender(event) ? quotaClient?.load() ?? null : null)
 }
 
 /**

@@ -230,16 +230,90 @@ function AccountSection() {
   )
 }
 
+// The daily quota, as a percentage. The user sees how much of today is used and
+// when it comes back; amounts never appear here, because the gateway sends a
+// percentage and the client has no price list.
+//
+// Running out is a plain wait-until-tomorrow state. Earning extra quota exists
+// in the gateway as a mechanism, but it has no user-facing entry until a real
+// provider is connected — an internal test task is not something to show users.
+const meterTrackStyle = {
+  height: 6, borderRadius: 3, overflow: 'hidden',
+  background: 'var(--dsw-alias-border-l3, #e4e7ec)',
+}
+const meterFillStyle = { height: '100%', background: 'var(--dsw-alias-accent, #3d6bfe)', borderRadius: 3 }
+
+function QuotaMeter({ wide }) {
+  const [snapshot, setSnapshot] = React.useState(null)
+
+  React.useEffect(() => {
+    if (!window.__mareoQuota) return
+    let active = true
+    const refresh = () => {
+      window.__mareoQuota.get().then((value) => {
+        if (active) setSnapshot(value)
+      }).catch(() => {})
+    }
+    refresh()
+    // The gateway is the source of truth, so re-read it while the window is in
+    // use rather than trying to track spending locally.
+    const timer = setInterval(refresh, 30000)
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      active = false
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
+  if (!wide || !snapshot || snapshot.quota.visible !== true) return null
+  const meter = snapshot.quota
+  const exhausted = meter.exhausted === true
+
+  return React.createElement('div', {
+    style: { display: 'grid', gap: 6, width: '100%', minWidth: 0, padding: '8px 2px 2px' },
+  },
+  React.createElement('div', {
+    style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, lineHeight: '16px' },
+  },
+    React.createElement('span', { style: { opacity: 0.75 } }, '今日额度'),
+    React.createElement('span', { style: { opacity: 0.9, whiteSpace: 'nowrap' } },
+      exhausted ? '已用完' : '已用 ' + meter.usedPercent + '%'),
+  ),
+  React.createElement('div', {
+    style: meterTrackStyle, role: 'progressbar',
+    'aria-valuenow': meter.usedPercent, 'aria-valuemin': 0, 'aria-valuemax': 100,
+  },
+    React.createElement('div', { style: { ...meterFillStyle, width: Math.max(2, meter.usedPercent) + '%' } })),
+  exhausted
+    ? React.createElement('span', { style: { fontSize: 12, opacity: 0.7 } }, '北京时间 0 点后自动恢复。')
+    : null)
+}
+
+/**
+ * The sidebar footer holds both Mareo surfaces. They share one slot entry
+ * because the slot is a single flex row — two registrations would sit side by
+ * side and squeeze each other.
+ */
+function SidebarFooter(props) {
+  return React.createElement('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: 6, width: '100%', minWidth: 0 },
+  },
+  React.createElement(QuotaMeter, props),
+  React.createElement(SponsoredAdSlot, props))
+}
+
 exports.inject = ['slots']
 exports.apply = (ctx) => {
   ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({ name: 'sidebar.brand.mark' }, BrandMark))
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'mareo-attribution' }, Attribution))
-  if (typeof window !== 'undefined' && window.__mareoSponsoredAd) {
+  if (typeof window !== 'undefined' && (window.__mareoSponsoredAd || window.__mareoQuota)) {
     ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-      name: 'sidebar.footer.action', id: 'mareo-sponsored-ad',
-    }, SponsoredAdSlot))
+      name: 'sidebar.footer.action', id: 'mareo-sidebar-footer',
+    }, SidebarFooter))
   }
   if (typeof window !== 'undefined' && window.__mareoAccount) {
     ctx.slots.inject('settings.section', () => ctx.slots.register({

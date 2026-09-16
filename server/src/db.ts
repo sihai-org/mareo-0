@@ -123,9 +123,48 @@ CREATE TABLE IF NOT EXISTS site_views (
   count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, path)
 );
+
+-- Operator-tunable numbers: the daily free quota, reward amounts, switches and
+-- the account allowlist. Stored as text because a human edits them through a
+-- CLI and because a wrong value must degrade to a default, never crash.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+-- One row per task a user was offered as a way to earn quota. What counts as
+-- "completing" it belongs to the provider; the quota ledger only records that
+-- a task finished and how much it was worth.
+CREATE TABLE IF NOT EXISTS reward_tasks (
+  taskId TEXT PRIMARY KEY,
+  accountId TEXT NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL,
+  amountMicro INTEGER NOT NULL,
+  minSeconds INTEGER NOT NULL,
+  createdAt TEXT NOT NULL,
+  completedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reward_tasks_account_time ON reward_tasks(accountId, createdAt);
+
+-- The ledger: one row per credit. A reversal (refunded commission, clawed-back
+-- ad payout) is a negative amount from the same provider, which is why amounts
+-- are signed. externalId is the provider's own identifier and is unique per
+-- provider, so a replayed completion can never credit twice.
+CREATE TABLE IF NOT EXISTS reward_grants (
+  grantId TEXT PRIMARY KEY,
+  accountId TEXT NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL,
+  externalId TEXT NOT NULL,
+  amountMicro INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  UNIQUE (provider, externalId)
+);
+CREATE INDEX IF NOT EXISTS idx_reward_grants_account_day ON reward_grants(accountId, day);
 `
 
-const SCHEMA_VERSION = 7
+const SCHEMA_VERSION = 8
 
 export function openDatabase(dbPath: string): GatewayDatabase {
   mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true })

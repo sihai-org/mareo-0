@@ -77,7 +77,14 @@ function slotHarness(ad: unknown) {
   return {
     render(wide = true) {
       cursor = 0
-      const node = renderSlot({ wide })
+      const footer = renderSlot({ wide })
+      // The slot now holds one stacked footer (quota meter + sponsored card),
+      // so drive the card component inside it.
+      const slot = (footer?.children ?? []).find(
+        (child: { tag?: { name?: string } }) => typeof child?.tag === 'function' && child.tag.name === 'SponsoredAdSlot',
+      )
+      if (slot === undefined) return null
+      const node = slot.tag(slot.props)
       effects.splice(0).forEach(effect => effect())
       return node
     },

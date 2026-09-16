@@ -159,7 +159,76 @@ DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.3
 
 `DAILY_LIMIT=0` 表示完全不限制。改这两个值只需改 ECS 上的 `deploy/.env` 并重启容器，不需要改代码。
 
-> 现实提醒：客户端每轮请求体会携带 1–3MB 上下文（`usage.promptChars` 实测中位数约 130 万字符），所以"不限量"并不是零成本。真实花费要等 token 采集落地（见文末待补埋点）才能算准。
+> 现实提醒：客户端每轮请求体会携带 1–3MB 上下文（`usage.promptChars` 实测中位数约 130 万字符），所以"不限量"并不是零成本。每次请求的真实花费按 token 计（见上文成本核算），额度线就是据此设的。
+
+## 每日免费额度
+
+额度是**产品线**（用完了今天就不能再用），与上面的护栏是两件事，两条都保留。
+
+**口径（定了就别改，改之前先想清楚）**
+
+- 额度按**真实成本**扣，单位是元（内部用微元，1 元 = 1000000）。不是按请求次数：一次长上下文请求和一次问候成本差几十倍。
+- 额度池 = **当日免费额度 + 当日任务入账**。进度条的分母就是这个池子，所以完成任务后分母变大、进度条回退一截。
+- **北京时间 0 点重置**。入账也是当日有效，不跨天累积。
+- **允许最后一次透支**：只要余额 > 0 就放行，这一笔可以扣成负数；之后再请求才拒绝。所以边界不是悬崖。
+- 计入额度的是**一切产生成本的模型调用**（含会话标题那种系统自带调用）。上游没返回 usage 的请求不计（成本未知，不能按 0 计，也不该因此拦人）。
+
+**三种模式**
+
+| `quota.mode` | 谁看到进度条 | 谁会被拦 | 用途 |
+|---|---|---|---|
+| `off`（默认） | 没人 | 没人 | 网关行为与上线前逐字节一致 |
+| `shadow` | 只有 `quota.rewardAccounts` 里的账号 | 没人 | 观察期：只让内部账号看到进度条 |
+| `enforce` | 所有人 | 超过额度的人 | 正式生效；任务入口仍只对白名单开放 |
+
+**服务端可配置（改完免重启）**
+
+```sh
+cd /srv/mareo/server/deploy
+docker compose exec -T gateway npm run config < /dev/null            # 列出全部键与当前值
+docker compose exec -T gateway npm run config -- set quota.mode shadow < /dev/null
+docker compose exec -T gateway npm run config -- set quota.dailyFreeMicro 10000000 < /dev/null
+docker compose exec -T gateway npm run config -- set quota.rewardAccounts <账号id> < /dev/null
+```
+
+键：`quota.mode`、`quota.dailyFreeMicro`、`quota.rewardAmountMicro`、`quota.dailyRewardCapMicro`、`quota.rewardMinSeconds`、`quota.rewardDailyLimit`、`quota.rewardAccounts`、`quota.rewardProvider`。金额一律微元（¥10 = `10000000`）。配置存在 `settings` 表里，下一个请求立即生效。**值写错会回落到默认值**（不会变成 0 把所有账号锁死）。
+
+> 注意：容器里跑 npm 一定要带 `< /dev/null`，否则 `docker compose exec` 会吃掉脚本自己的 stdin。
+
+**影子观察怎么读**
+
+`npm run cost` 的「额度影响」区块直接给出结论，不需要额外埋点——它用当天真实的计价行重算"如果当时就限量会怎样"：
+
+```
+阈值        会被挡账号   会被挡请求   占总请求   超出阈值的成本
+¥3.00         6/24            1234      45.2%          ¥28.10
+¥5.00 …
+¥10.00 …                                                  ← 当前配置
+```
+
+看三件事：**会被挡的账号数**（决定会不会得罪人）、**会被挡的请求占比**（决定拦住多少使用）、**超出阈值的成本**（决定省了多少钱）。跑几天再定免费额度。
+
+**任务（奖励）机制：有接口，暂时没有界面**
+
+服务端已经能通过"完成任务"给账号加额度，provider 抽象把"广告"和"额度"解耦了；假 provider `fake-ad` 只校验"任务开始后过了足够时间"，用来跑通链路。**界面上目前完全不出现**——额度用完就是等到 0 点，不做任何引导。接真实供给（激励视频 / 电商佣金 / 问卷）时只换 provider 实现，账本与额度逻辑不动。
+
+没有界面时怎么验证（在服务器上，替换 `<token>`）：
+
+```sh
+docker compose exec -T gateway sh -c '
+  curl -s -H "authorization: Bearer <token>" http://127.0.0.1:3000/quota
+  curl -s -X POST -H "authorization: Bearer <token>" http://127.0.0.1:3000/reward/start
+' < /dev/null
+# 用返回的 taskId 提交完成（minSeconds 未到会被拒，这正是要验证的）
+```
+
+演练时的收尾（做完必做）：`quota.dailyFreeMicro` 调回真实值 → `quota.rewardAccounts` 清空 → `quota.mode` 回到 `shadow` 或 `off`。
+
+**上线顺序**：`off` → `shadow`（观察真实分布，决定额度数值）→ 白名单内 `enforce` 验证 → 全量 `enforce`。
+
+> 删除账号时要一并删除 `reward_tasks`、`reward_grants`（和广告的 `ad_events`）——这三张表都以 `users(id)` 为外键，漏删会删不掉账号本身。
+
+> 已知取舍：每次模型请求都会当天重算一遍该账号已花费的成本（几毫秒，几千行以内）。这样"已花多少"永远等于账本上的钱，不需要额外维护一个可能算错的计数器。真实用量涨到明显影响延迟时再考虑加缓存。
 
 ## 节奏
 

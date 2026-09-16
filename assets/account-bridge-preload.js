@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('__mareoSponsoredAd', {
   click: (adId) => ipcRenderer.invoke('mareo:ad:click', adId),
 })
 
+// The daily quota meter. Read-only: the renderer learns a percentage, and the
+// gateway alone decides what anyone may spend.
+contextBridge.exposeInMainWorld('__mareoQuota', {
+  get: () => ipcRenderer.invoke('mareo:quota:get'),
+})
+
 contextBridge.exposeInMainWorld('__mareoAccount', {
   getProfile: () => ipcRenderer.invoke('mareo:account:get'),
   updateName: (displayName) => ipcRenderer.invoke('mareo:account:update-name', displayName),
