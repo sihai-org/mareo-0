@@ -35,6 +35,7 @@ function settingsFor(account: string, overrides: Partial<Settings> = {}): Settin
     rewardDailyLimit: 3,
     rewardAccounts: [account],
     rewardProvider: 'fake-ad',
+    accountAllowances: new Map(),
     ...overrides,
   }
 }

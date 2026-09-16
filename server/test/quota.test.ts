@@ -8,9 +8,9 @@ import test from 'node:test'
 import { createTokenAccount, openDatabase, type GatewayDatabase } from '../src/db.js'
 import { recordUsage } from '../src/usage.js'
 import { costOf, type TokenUsage } from '../src/pricing.js'
-import { grantedMicroToday, quotaState, quotaVisible, spentMicroSince } from '../src/quota.js'
+import { dailyFreeMicroFor, grantedMicroToday, quotaState, quotaVisible, spentMicroSince } from '../src/quota.js'
 import { creditReward } from '../src/rewards.js'
-import { readSettings, writeSetting } from '../src/settings.js'
+import { parseAccountAllowances, readSettings, writeSetting } from '../src/settings.js'
 import { dayStamp, startOfDay } from '../src/clock.js'
 import { quotaImpact, type Row } from '../src/cost-report.js'
 
@@ -152,6 +152,24 @@ test('a broken setting falls back to the default instead of to zero', () => {
   assert.equal(readSettings(db).dailyFreeMicro, 10_000_000)
   assert.throws(() => writeSetting(db, 'quota.mode', 'sometimes'), /off/)
   assert.throws(() => writeSetting(db, 'quota.unknown', '1'), /未知配置项/)
+})
+
+test('one account can be given a different allowance than everyone else', () => {
+  const account = newAccount()
+  const other = newAccount()
+  const settings = settingsFor({ accountAllowances: new Map([[account, 100_000_000]]) })
+  assert.equal(dailyFreeMicroFor(settings, account), 100_000_000)
+  assert.equal(dailyFreeMicroFor(settings, other), settings.dailyFreeMicro)
+  assert.equal(quotaState(db, account, settings).limitMicro, 100_000_000)
+  assert.equal(quotaState(db, other, settings).limitMicro, settings.dailyFreeMicro)
+
+  // A malformed pair is dropped, never turned into a zero allowance.
+  assert.deepEqual([...parseAccountAllowances('abc:5, no-colon, , xyz:notanumber, def:25')], [
+    ['abc', 5],
+    ['def', 25],
+  ])
+  assert.equal(parseAccountAllowances(undefined).size, 0)
+  assert.throws(() => writeSetting(db, 'quota.accountAllowances', 'no-colon'), /账号id:微元/)
 })
 
 test('shadow analysis counts the accounts and requests a threshold would stop', () => {

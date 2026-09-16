@@ -87,6 +87,11 @@ export function quotaVisible(settings: Settings, accountId: string): boolean {
   return settings.quotaMode === 'enforce' || settings.rewardAccounts.includes(accountId)
 }
 
+/** The free allowance for one account: an override if the operator set one. */
+export function dailyFreeMicroFor(settings: Settings, accountId: string): number {
+  return settings.accountAllowances.get(accountId) ?? settings.dailyFreeMicro
+}
+
 export function quotaState(
   db: GatewayDatabase,
   accountId: string,
@@ -94,7 +99,7 @@ export function quotaState(
   now = new Date(),
 ): QuotaState {
   const spentMicro = spentMicroSince(db, accountId, startOfDay(now))
-  const limitMicro = settings.dailyFreeMicro + grantedMicroToday(db, accountId, now)
+  const limitMicro = dailyFreeMicroFor(settings, accountId) + grantedMicroToday(db, accountId, now)
   const remainingMicro = limitMicro - spentMicro
   return {
     limitMicro,

@@ -30,6 +30,11 @@ export interface Settings {
   rewardAccounts: string[]
   /** Which task provider issues rewards: `fake-ad` today, an ad network later. */
   rewardProvider: string
+  /**
+   * Per-account daily allowance override, in micro-yuan. The operator's own
+   * account needs headroom for testing; an ordinary account gets the default.
+   */
+  accountAllowances: Map<string, number>
 }
 
 const SETTING_DEFAULTS: Record<string, string> = {
@@ -41,6 +46,7 @@ const SETTING_DEFAULTS: Record<string, string> = {
   'quota.rewardDailyLimit': '3',
   'quota.rewardAccounts': '',
   'quota.rewardProvider': 'fake-ad',
+  'quota.accountAllowances': '',
 }
 
 /** What an operator may set, with the reason it exists. Used by the CLI's help. */
@@ -53,6 +59,7 @@ export const SETTING_KEYS: { key: string; meaning: string }[] = [
   { key: 'quota.rewardDailyLimit', meaning: '每日任务次数上限' },
   { key: 'quota.rewardAccounts', meaning: '可用奖励的账号 id，逗号分隔；空=无人可用' },
   { key: 'quota.rewardProvider', meaning: '任务来源：fake-ad（模拟）或将来接入的真实平台' },
+  { key: 'quota.accountAllowances', meaning: '按账号覆盖每日额度，格式 账号id:微元，逗号分隔' },
 ]
 
 export function readRawSettings(db: GatewayDatabase): Map<string, string> {
@@ -65,6 +72,22 @@ function wholeNumber(raw: string | undefined, fallback: number): number {
   const value = Number(raw)
   if (!Number.isInteger(value) || value < 0) return fallback
   return value
+}
+
+/**
+ * `账号id:微元` pairs. A malformed pair is dropped rather than defaulting the
+ * whole map away, and an unknown account simply never matches.
+ */
+export function parseAccountAllowances(raw: string | undefined): Map<string, number> {
+  const allowances = new Map<string, number>()
+  for (const entry of (raw ?? '').split(',')) {
+    const [account, micro] = entry.split(':').map((part) => part.trim())
+    if (account === undefined || micro === undefined || !/^[\w-]{1,64}$/.test(account)) continue
+    const value = wholeNumber(micro, -1)
+    if (value < 0) continue
+    allowances.set(account, value)
+  }
+  return allowances
 }
 
 export function readSettings(db: GatewayDatabase): Settings {
@@ -83,6 +106,7 @@ export function readSettings(db: GatewayDatabase): Settings {
       .map((entry) => entry.trim())
       .filter((entry) => entry !== ''),
     rewardProvider: (value('quota.rewardProvider') ?? 'fake-ad').trim() || 'fake-ad',
+    accountAllowances: parseAccountAllowances(value('quota.accountAllowances')),
   }
 }
 
@@ -103,6 +127,14 @@ function validateSetting(key: string, raw: string): string {
     }
   } else if (key === 'quota.rewardProvider') {
     if (!/^[\w-]{1,32}$/.test(value)) throw new Error(`任务来源标识格式不对：${raw}`)
+  } else if (key === 'quota.accountAllowances') {
+    for (const entry of value.split(',').map((part) => part.trim()).filter((part) => part !== '')) {
+      const [account, micro] = entry.split(':').map((part) => part.trim())
+      if (account === undefined || micro === undefined || !/^[\w-]{1,64}$/.test(account)) {
+        throw new Error(`格式应为 账号id:微元，收到 ${entry}`)
+      }
+      if (wholeNumber(micro, -1) < 0) throw new Error(`${entry} 的额度需要是非负整数（微元）`)
+    }
   } else if (wholeNumber(value, -1) < 0) {
     throw new Error(`${key} 需要非负整数，收到 ${raw}`)
   }
