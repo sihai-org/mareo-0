@@ -1,0 +1,12 @@
+.legal { max-width: 780px; margin: 0 auto; padding: 48px 24px 72px; line-height: 1.85; }
+.legal h1 { font-size: 30px; margin-bottom: 8px; }
+.legal h2 { font-size: 19px; margin: 32px 0 10px; }
+.legal p, .legal li { opacity: 0.86; }
+.legal table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+.legal th, .legal td { border: 1px solid rgba(128, 128, 128, 0.3); padding: 8px 10px; text-align: left; }
+.legal code { background: rgba(128, 128, 128, 0.16); padding: 1px 5px; border-radius: 4px; }
+.legal .updated { opacity: 0.6; font-size: 14px; }
+.legal .back { display: inline-block; margin-bottom: 24px; }
+.legal .privacy-language { float: right; text-decoration: underline; }
+.legal td { overflow-wrap: anywhere; }
+.legal a.privacy-language { display:inline-block; }

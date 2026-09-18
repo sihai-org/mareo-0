@@ -7,8 +7,9 @@
   <meta name="theme-color" content="#fafbff">
   <title>Mareo — 免费的 AI 工作助手</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
-  <link rel="stylesheet" href="styles.css?v=20260914">
-  <script src="app.js?v=20260914" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20260918">
+  <script src="app.js?v=20260918" defer></script>
+  <script src="motion.js?v=20260918" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main"><span lang="zh-CN">跳转到内容</span><span lang="en">Skip to content</span></a>
@@ -31,15 +32,15 @@
         <h1 id="hero-title"><span lang="zh-CN">当前免费，<br><span class="accent">你的 AI 工作助手。</span></span><span lang="en">Free
             today.<br><span class="accent">Your AI work assistant.</span></span></h1>
         <p class="hero-promise"><span lang="zh-CN">能写代码，能写文章，<br>能做表格和 PPT。</span><span lang="en">Write code. Create content.<br>Make spreadsheets and slides.</span></p>
-        <p class="intro"><span lang="zh-CN">Mareo，你的桌面 AI 工作助手。</span><span lang="en">Mareo, your desktop AI work assistant.</span></p>
-        <div class="hero-downloads">
+        <p class="intro"><span lang="zh-CN">读取你的文件，调用工具、运行命令，把任务一步步做完。</span><span lang="en">Read your files, use tools, and run commands to get tasks done, step by step.</span></p>
+        <div class="hero-downloads" id="download">
           <div><a data-download="windows" class="button primary" hidden><span lang="zh-CN">下载 Windows 版</span><span lang="en">Download for Windows</span><span aria-hidden="true">↓</span></a><p data-pending="windows" hidden><span lang="zh-CN">Windows 下载即将开放</span><span lang="en">Windows download coming soon</span></p><small>Windows 10 / 11 · x64</small></div>
           <div><a data-download="macos" class="button secondary" hidden><span lang="zh-CN">下载 Mac 版</span><span lang="en">Download for Mac</span><span aria-hidden="true">↓</span></a><p data-pending="macos" hidden><span lang="zh-CN">Mac 下载即将开放</span><span lang="en">Mac download coming soon</span></p><small>macOS · Apple Silicon</small></div>
         </div>
-        <p class="platform"><span lang="zh-CN">当前阶段不设使用次数或额度上限。未来收费安排如有调整，将另行说明。</span><span lang="en">No limits on usage count or allowance during the current phase. Any future pricing changes will be announced separately.</span></p>
         <noscript><p class="platform">请启用 JavaScript 获取最新下载链接。 / Enable JavaScript for the latest downloads.</p></noscript>
       </div>
       <div class="hero-preview">
+        <div class="hero-particles" aria-hidden="true"></div>
         <img src="assets/mareo-workspace.png" width="2940" height="1846" alt="Mareo 桌面工作区 / Mareo desktop workspace" fetchpriority="high">
         <p><span lang="zh-CN">你的文件、项目和下一步行动，在同一个工作区。</span><span lang="en">Your files, projects, and next steps. One workspace.</span></p>
       </div>
@@ -69,35 +70,11 @@
       <div><ul><li><span lang="zh-CN">无需安装 Node</span><span lang="en">No Node installation</span></li><li><span lang="zh-CN">无需打开命令行启动</span><span lang="en">No terminal command to launch</span></li><li><span lang="zh-CN">无需自己配置 DeepSeek Harness 或 API Key</span><span lang="en">No Harness setup or API key to manage</span></li></ul><p><span lang="zh-CN">下载安装 Mareo，登录后就能开始使用。</span><span lang="en">Download Mareo, install it, and sign in to get started.</span></p></div>
     </section>
 
-    <section id="download" class="download wrap" aria-labelledby="download-title">
-      <div class="download-panel">
-        <div><p class="eyebrow">A NEW START</p><h2 id="download-title"><span lang="zh-CN">下一步，<br>让 Mareo 帮你。</span><span lang="en">Your next task.<br>Meet your assistant.</span></h2><p class="download-description"><span lang="zh-CN">当前免费使用。选择适合你电脑的版本。</span><span lang="en">Free to use today. Choose the version for your computer.</span></p><p class="download-version" id="download-version"></p></div>
-        <div class="releases">
-          <div class="release">
-            <img src="assets/app-icon.png" width="88" height="88" alt="Mareo" loading="lazy">
-            <h3>Mareo <span>for macOS</span></h3>
-            <p>Apple Silicon · arm64</p>
-            <a data-download="macos" class="button download-button" hidden><span lang="zh-CN">下载 macOS 版</span><span lang="en">Download for macOS</span><span aria-hidden="true">↓</span></a>
-            <p data-pending="macos" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
-            <p class="release-note"><span lang="zh-CN">面向搭载 Apple 芯片的 Mac。</span><span lang="en">For Mac computers with Apple silicon.</span></p>
-          </div>
-          <div class="release">
-            <img src="assets/app-icon.png" width="88" height="88" alt="Mareo" loading="lazy">
-            <h3>Mareo <span>for Windows</span></h3>
-            <p>Windows 10 / 11 · x64</p>
-            <a data-download="windows" class="button download-button" hidden><span lang="zh-CN">下载 Windows 版</span><span lang="en">Download for Windows</span><span aria-hidden="true">↓</span></a>
-            <p data-pending="windows" class="download-pending"><span lang="zh-CN">下载即将开放</span><span lang="en">Download coming soon</span></p>
-            <p class="release-note"><span lang="zh-CN">面向 64 位 Windows 10 / 11。</span><span lang="en">For 64-bit Windows 10 / 11.</span></p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="details wrap" aria-label="About Mareo / 关于 Mareo">
       <div><h3><span lang="zh-CN">桌面运行，在线协作</span><span lang="en">On your desktop. Connected online.</span></h3><p><span lang="zh-CN">Harness 运行在你的电脑上。使用模型需要联网；相关请求内容会经 Mareo 网关发送至模型服务，并非完全离线处理。</span><span lang="en">Harness runs on your computer. Model access requires an internet connection; relevant request content is sent through the Mareo gateway to the model service, not processed entirely offline.</span></p></div>
       <div><h3><span lang="zh-CN">基于 Harness，保持独立</span><span lang="en">Built on Harness. Independently made.</span></h3><p><span lang="zh-CN">Mareo 是基于 DeepSeek Harness 构建的独立桌面产品，并非 DeepSeek 官方应用。</span><span lang="en">Mareo is an independent desktop product built on DeepSeek Harness, not an official DeepSeek application.</span></p></div>
     </section>
   </main>
-  <footer class="footer wrap"><a class="brand" href="#"><img src="assets/logo.png" width="32" height="32" alt=""><span>Mareo</span></a><p>Built on <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a></p><p><a href="privacy.html"><span lang="zh-CN">隐私说明</span><span lang="en">Privacy</span></a></p><span class="copyright">© 2026 Mareo</span><p class="footer-meta"><span lang="zh-CN">鄂ICP备2025136694号-4 · 联系 <a href="mailto:contact@mareo.ai">contact@mareo.ai</a></span><span lang="en">ICP 鄂ICP备2025136694号-4 · Contact <a href="mailto:contact@mareo.ai">contact@mareo.ai</a></span></p></footer>
+  <footer class="footer wrap"><a class="brand" href="#"><img src="assets/logo.png" width="32" height="32" alt=""><span>Mareo</span></a><p>Built on <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a></p><p><span lang="zh-CN"><a href="privacy.html">隐私说明</a></span><span lang="en"><a href="privacy-en.html">Privacy</a></span></p><span class="copyright">© 2026 Mareo</span><p class="footer-meta"><span lang="zh-CN">鄂ICP备2025136694号-4 · 联系 <a href="mailto:contact@mareo.ai">contact@mareo.ai</a></span><span lang="en">ICP 鄂ICP备2025136694号-4 · Contact <a href="mailto:contact@mareo.ai">contact@mareo.ai</a></span></p></footer>
 </body>
 </html>

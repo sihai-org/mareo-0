@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Privacy — Mareo</title>
+    <meta name="description" content="What Mareo processes and stores, why, and your choices.">
+    <link rel="icon" href="assets/app-icon.png">
+    <link rel="stylesheet" href="styles.css?v=20260918">
+    <link rel="stylesheet" href="privacy.css?v=20260918">
+  </head>
+  <body>
+    <main class="legal">
+      <a class="back" href="index.html">← Back to Mareo</a>
+      <a class="privacy-language" href="privacy.html" lang="zh-CN" hreflang="zh-CN">中文</a>
+      <h1>Privacy</h1>
+      <p class="updated">Last updated: September 18, 2026</p>
+      <p>This notice separates diagnostics, model requests, session titles, website visit counts, and advertising events. Each has a different scope and purpose. Excluding conversations from diagnostics does not mean that the service never processes chat content or stores session titles.</p>
+
+      <h2>Diagnostics: what is collected</h2>
+      <p>To understand whether Mareo can be installed, launched, and signed into successfully, the client reports these anonymous diagnostic events:</p>
+      <table>
+        <thead><tr><th>Event</th><th>When</th><th>Contents</th></tr></thead>
+        <tbody>
+          <tr><td><code>install_confirmed</code></td><td>First successful launch and sign-in after installation</td><td>Version, operating system, CPU architecture</td></tr>
+          <tr><td><code>launch</code></td><td>At the end of each startup attempt</td><td>Version, operating system, success or failure, failure stage, duration in milliseconds</td></tr>
+          <tr><td><code>harness_exit</code></td><td>When the built-in engine exits unexpectedly</td><td>Version, operating system, uptime, exit code or signal, and the last 20 lines of technical output before the crash (up to 4 KB, with local paths, usernames, and startup tokens removed)</td></tr>
+          <tr><td><code>signin</code></td><td>At the end of a sign-in attempt</td><td>Version, operating system, outcome: success, incorrect code, email delivery failure, timeout, or cancellation</td></tr>
+        </tbody>
+      </table>
+      <p><strong>These diagnostic events do not contain</strong> conversations, prompts, model replies, attachments, email addresses, nicknames, access tokens, IP addresses stored by the diagnostic service, or device fingerprints. No persistent device identifier is used. This scope applies to diagnostics only; model requests and session titles are described below.</p>
+      <ul>
+        <li>Before sign-in succeeds, the client has no account credentials. Failed sign-in events at this stage are anonymous so we can identify sign-in problems.</li>
+        <li>The service briefly processes source IP addresses in memory for rate limiting; these are not written to the database or used for other purposes.</li>
+        <li>Crash reports use technical error output from the engine to diagnose failures, not conversation records. They are controlled by the “Send anonymous usage statistics” setting.</li>
+      </ul>
+
+      <h2>Diagnostics: purpose</h2>
+      <p>Diagnostics help measure installation success, first-launch stability, sign-in and model-call stability, and unexpected engine exits, so we can find and fix problems. Diagnostics are not used for advertising or profiling and are not sold or shared with third parties.</p>
+
+      <h2>Model requests</h2>
+      <p>The client sends chat content through the Mareo gateway to DeepSeek for inference. The gateway records usage metadata for each request (account, model name, character count, duration, and HTTP status) for quotas and troubleshooting. It does not log conversation content.</p>
+
+      <h2>Session titles</h2>
+      <p>To understand the kinds of tasks users perform, we store each session’s title on the server. This is the engine-generated title shown in your session list. It is generated from the beginning of a conversation and <strong>may contain text or sensitive information from your first message</strong>. When the model is unavailable, the engine uses a shortened version of the first message as the title. Title synchronization does not separately upload conversation bodies, file paths, or file contents, but a title itself may contain text derived from them. The stored title is deleted when the session is deleted. Titles are used only to count task categories (such as coding, writing, spreadsheets, or research) and plan capacity, not to target advertising.</p>
+
+      <h2>Website visit counts</h2>
+      <p>The website sends a counting request to the Mareo gateway when a page loads. It stores only total views per day and page, not individual visit records. It stores no IP addresses or User-Agent strings, sets no cookies, and uses no device or user identifiers. Environments that do not execute JavaScript are not counted. These counts cannot identify which individual visited the site.</p>
+
+      <h2>Advertising and recommendations</h2>
+      <p>The client may display cards labeled “广告 / Sponsored” to support Mareo’s operation. Ads are manually configured by Mareo, are not targeted using your conversations, session titles, files, or workspace contents, and use no third-party advertising SDK.</p>
+      <p>When a card is actually visible, or you click it, we record the ad ID, placement, event ID, impression or click type, server timestamp, and your <strong>internal Mareo user ID</strong> to measure ad performance and investigate anomalies. These events <strong>are not anonymous</strong>. They contain no email, nickname, conversation, file, or workspace content, and are not controlled by the anonymous usage statistics setting. No impression is recorded when there is no ad or it is not actually displayed.</p>
+      <p>Images load from the configured HTTPS asset host, which receives normal network information for the image request. The client sends no Mareo login token, user ID, page referrer, or cross-origin credentials with it. Clicking opens the advertiser’s site in your system browser without adding your Mareo user ID or login token. That site has its own privacy policy and may use its own cookies or affiliate parameters.</p>
+      <p>Ad events are stored on Mareo’s own server. Events older than 180 days are removed when a new ad event is written; this cleanup does not run while no new events arrive. To request deletion of account-linked ad events, contact us below.</p>
+
+      <h2>Your choices</h2>
+      <ul>
+        <li>In Mareo, open <strong>Settings → Account → Send anonymous usage statistics</strong>. Turning it off immediately stops diagnostic reporting; ad impressions and clicks are recorded separately.</li>
+        <li>Turning off diagnostic statistics does not affect Mareo’s features.</li>
+        <li>To delete previously reported data, email <a href="mailto:contact@mareo.ai">contact@mareo.ai</a> with your account details. We will delete the event records associated with that account.</li>
+      </ul>
+
+      <h2>Storage and retention</h2>
+      <p>Diagnostic events and usage data are stored on Mareo’s own Alibaba Cloud server in Hangzhou, China, retained for 180 days, and automatically cleaned up when expired. Ad event cleanup follows the timing described above.</p>
+      <h2>Changes</h2>
+      <p>We will update this page and its date when this notice changes.</p>
+      <p class="updated">Contact: <a href="mailto:contact@mareo.ai">contact@mareo.ai</a></p>
+    </main>
+  </body>
+</html>

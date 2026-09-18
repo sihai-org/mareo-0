@@ -44,12 +44,10 @@ for (const button of languageButtons) {
 
 async function applyDownloads() {
   let downloads = { ...downloadFallback };
-  let version = '';
   try {
     const response = await fetch(MANIFEST_URL, { cache: 'no-store' });
     if (response.ok) {
       const manifest = await response.json();
-      if (typeof manifest.version === 'string') version = manifest.version;
       if (manifest.downloads && typeof manifest.downloads === 'object') {
         downloads = { macos: manifest.downloads.macos ?? '', windows: manifest.downloads.windows ?? '' };
       }
@@ -63,9 +61,6 @@ async function applyDownloads() {
     }
     for (const pending of document.querySelectorAll(`[data-pending="${platform}"]`)) pending.hidden = Boolean(url);
   }
-
-  const versionLabel = document.getElementById('download-version');
-  if (versionLabel && version) versionLabel.textContent = `v${version}`;
 }
 
 // Page-view beacon: one counting ping per page load and no identifier of any

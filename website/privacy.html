@@ -6,26 +6,18 @@
     <title>隐私说明 — Mareo</title>
     <meta name="description" content="Mareo 收集哪些数据、用来做什么、如何关闭。" />
     <link rel="icon" href="assets/app-icon.png" />
-    <link rel="stylesheet" href="styles.css" />
-    <style>
-      .legal { max-width: 780px; margin: 0 auto; padding: 48px 24px 72px; line-height: 1.85; }
-      .legal h1 { font-size: 30px; margin-bottom: 8px; }
-      .legal h2 { font-size: 19px; margin: 32px 0 10px; }
-      .legal p, .legal li { opacity: 0.86; }
-      .legal table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
-      .legal th, .legal td { border: 1px solid rgba(128, 128, 128, 0.3); padding: 8px 10px; text-align: left; }
-      .legal code { background: rgba(128, 128, 128, 0.16); padding: 1px 5px; border-radius: 4px; }
-      .legal .updated { opacity: 0.6; font-size: 14px; }
-      .legal .back { display: inline-block; margin-bottom: 24px; }
-    </style>
+    <link rel="stylesheet" href="styles.css?v=20260918" />
+    <link rel="stylesheet" href="privacy.css?v=20260918">
   </head>
   <body>
     <main class="legal">
       <a class="back" href="index.html">← 返回 Mareo</a>
+      <a class="privacy-language" href="privacy-en.html" lang="en" hreflang="en">English</a>
       <h1>隐私说明</h1>
-      <p class="updated">最后更新：2026-09-16</p>
+      <p class="updated">最后更新：2026-09-18</p>
+      <p>本说明分别介绍诊断统计、模型请求、会话标题、官网访问统计与广告事件。它们的数据范围和用途不同；「诊断统计不收集对话」不代表整个服务不处理聊天内容，也不代表不保存会话标题。</p>
 
-      <h2>我们收集什么</h2>
+      <h2>诊断统计：收集范围</h2>
       <p>为了知道 Mareo <strong>能否正常安装、启动、登录</strong>，客户端会上报以下匿名统计事件：</p>
       <table>
         <thead>
@@ -39,7 +31,7 @@
         </tbody>
       </table>
       <p>
-        <strong>不收集</strong>：对话内容、提示词、模型回复、附件、邮箱地址、昵称、访问令牌、IP 地址（服务端不落库）、设备指纹（无任何持久化设备标识）。
+        <strong>上述诊断事件不包含</strong>：对话内容、提示词、模型回复、附件、邮箱地址、昵称、访问令牌、IP 地址（诊断统计服务端不落库）、设备指纹（无任何持久化设备标识）。此范围仅指诊断统计；模型请求和会话标题见下文。
       </p>
       <ul>
         <li>登录成功前客户端没有账号凭据，此时的登录失败事件是<strong>匿名</strong>的，否则我们无法发现"装上了但登不进去"这类故障。</li>
@@ -47,7 +39,7 @@
         <li>崩溃报告中的技术输出取自引擎自身的错误输出，用于定位崩溃原因，<strong>不包含你的对话记录</strong>；它同样受「发送匿名使用统计」开关控制。</li>
       </ul>
 
-      <h2>用来做什么</h2>
+      <h2>诊断统计：用途</h2>
       <p>上述诊断统计用于统计安装成功率、首次启动稳定性、登录与模型调用稳定性、引擎异常退出率，帮助发现并修复故障。诊断统计不用于广告，不用于用户画像，不向第三方出售或共享。</p>
 
       <h2>模型请求</h2>
@@ -57,7 +49,7 @@
 
       <h2>会话标题</h2>
       <p>
-        为便于了解用户在做哪类任务，我们会保存每个会话的<strong>标题</strong>——它就是你在会话列表中看到的那个标题，由引擎自动生成。标题由模型根据<strong>会话开头的内容</strong>生成，因此<strong>可能包含你首条消息中的少量文字</strong>；当模型不可用时，引擎会用首条消息的截断文字作为标题。我们<strong>不保存对话正文、文件路径与文件内容</strong>，标题以外的会话内容不会被记录；会话被删除时标题一并删除。标题只用于统计任务类型（如编码、写作、表格、调研）与容量规划。
+        为便于了解用户在做哪类任务，我们会在服务端保存每个会话的<strong>标题</strong>——它就是你在会话列表中看到的那个标题，由引擎自动生成。标题由模型根据<strong>会话开头的内容</strong>生成，因此<strong>可能包含你首条消息中的文字或敏感信息</strong>；当模型不可用时，引擎会用首条消息的截断文字作为标题。标题同步不另外上传对话正文、文件路径或文件内容，但标题本身可能包含从这些内容中生成的文字。会话被删除时标题一并删除。标题只用于统计任务类型（如编码、写作、表格、调研）与容量规划，不用于广告定向。
       </p>
 
       <h2>官网访问统计</h2>

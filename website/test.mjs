@@ -20,9 +20,6 @@ async function openPage({ saved, storageBlocked = false, manifest, offline = fal
   const meta = {}, languageGroup = { hidden: true };
   const links = { 'download-link': { hidden: true }, 'download-link-windows': { hidden: true } };
   const pendings = { 'download-pending': { hidden: false }, 'download-pending-windows': { hidden: false } };
-  const heroLinks = { macos: { hidden: true }, windows: { hidden: true } };
-  const heroPendings = { macos: { hidden: true }, windows: { hidden: true } };
-  const version = { textContent: '' };
   const document = {
     documentElement: { lang: 'zh-CN' },
     querySelectorAll: selector => {
@@ -30,11 +27,10 @@ async function openPage({ saved, storageBlocked = false, manifest, offline = fal
       const [, kind, platform] = selector.match(/\[data-(download|pending)="(macos|windows)"\]/);
       const suffix = platform === 'macos' ? '' : '-windows';
       return kind === 'download'
-        ? [heroLinks[platform], links[`download-link${suffix}`]]
-        : [heroPendings[platform], pendings[`download-pending${suffix}`]];
+        ? [links[`download-link${suffix}`]]
+        : [pendings[`download-pending${suffix}`]];
     },
     querySelector: selector => (selector === '.languages' ? languageGroup : meta),
-    getElementById: id => links[id] ?? pendings[id] ?? (id === 'download-version' ? version : null),
   };
   const storage = new Map(saved ? [['mareo-site-language', saved]] : []);
   vm.runInNewContext(script, {
@@ -50,7 +46,7 @@ async function openPage({ saved, storageBlocked = false, manifest, offline = fal
   });
   // applyDownloads resolves asynchronously once the manifest has been read.
   await new Promise(resolve => setTimeout(resolve, 0));
-  return { document, buttons, meta, storage, languageGroup, links, pendings, version, heroLinks, heroPendings };
+  return { document, buttons, meta, storage, languageGroup, links, pendings };
 }
 
 test('Chinese default, accessible language toggle and remembered English', async () => {
@@ -97,9 +93,6 @@ test('Downloads follow the published manifest per platform', async () => {
   assert.equal(page.links['download-link-windows'].hidden, false);
   assert.equal(page.pendings['download-pending'].hidden, true);
   assert.equal(page.pendings['download-pending-windows'].hidden, true);
-  assert.equal(page.version.textContent, 'v0.1.1');
-  assert.deepEqual(page.heroLinks.macos, page.links['download-link']);
-  assert.deepEqual(page.heroLinks.windows, page.links['download-link-windows']);
 });
 
 test('A platform without a manifest entry keeps its coming-soon note', async () => {
@@ -109,8 +102,6 @@ test('A platform without a manifest entry keeps its coming-soon note', async () 
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, true);
   assert.equal(page.pendings['download-pending-windows'].hidden, false);
-  assert.equal(page.heroLinks.windows.hidden, true);
-  assert.equal(page.heroPendings.windows.hidden, false);
 });
 
 test('An unreachable manifest falls back to the built-in links', async () => {
@@ -120,8 +111,6 @@ test('An unreachable manifest falls back to the built-in links', async () => {
   assert.equal(page.links['download-link-windows'].href, fallback.windows);
   assert.equal(page.links['download-link'].hidden, false);
   assert.equal(page.links['download-link-windows'].hidden, false);
-  assert.deepEqual(page.heroLinks.macos, page.links['download-link']);
-  assert.deepEqual(page.heroLinks.windows, page.links['download-link-windows']);
 });
 
 test('Hero includes both platform downloads, core promise and the real screenshot', () => {
@@ -129,26 +118,75 @@ test('Hero includes both platform downloads, core promise and the real screensho
   assert.match(hero, /data-download="macos"/);
   assert.match(hero, /data-download="windows"/);
   assert.match(hero, /当前免费，/);
-  assert.match(hero, /不限量使用。/);
-  assert.match(hero, /Free today\./);
-  assert.match(hero, /Unlimited use\./);
-  assert.match(hero, /当前阶段不设使用次数或额度上限/);
-  assert.match(hero, /未来收费安排如有调整，将另行说明/);
-  assert.match(hero, /Any future pricing changes will be announced separately/);
+  assert.match(hero, /Free\s+today\./);
+  assert.doesNotMatch(html, /不限量|额度上限|Unlimited use|No limits on usage/);
+  assert.match(hero, /读取你的文件，调用工具、运行命令，把任务一步步做完/);
+  assert.match(hero, /id="download"/);
+  assert.equal((html.match(/data-download=/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /download-panel|download-title|download-version/);
   assert.match(hero, /能做表格和 PPT/);
   assert.match(hero, /assets\/mareo-workspace.png/);
 });
 
 test('Static assets and fragment links resolve within the standalone directory', () => {
-  for (const [, reference] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
-    if (reference === '#') continue;
-    if (reference.startsWith('#')) assert(html.includes(`id="${reference.slice(1)}"`), reference);
-    else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference)) continue; // absolute schemes: https, mailto, …
-    else assert(existsSync(new URL(reference.split('?')[0].split('#')[0], import.meta.url)), reference);
+  const pages = ['index.html', 'privacy.html', 'privacy-en.html'];
+  for (const page of pages) {
+    const contents = readFileSync(new URL(page, import.meta.url), 'utf8');
+    for (const [, reference] of contents.matchAll(/(?:href|src)="([^"]+)"/g)) {
+      if (reference === '#') continue;
+      if (reference.startsWith('#')) assert(contents.includes(`id="${reference.slice(1)}"`), reference);
+      else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference)) continue;
+      else assert(existsSync(new URL(reference.split('?')[0].split('#')[0], import.meta.url)), reference);
+    }
   }
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
   assert.match(html, /<html lang="zh-CN">/);
+});
+
+test('Particles are decorative, bounded and pause when the document is hidden', () => {
+  const particles = [];
+  let paused;
+  let onVisibilityChange;
+  const document = {
+    hidden: true,
+    querySelector: () => ({
+      append: particle => particles.push(particle),
+      classList: { toggle: (_name, value) => { paused = value; } },
+    }),
+    createElement: () => ({ style: {} }),
+    addEventListener: (name, callback) => {
+      assert.equal(name, 'visibilitychange');
+      onVisibilityChange = callback;
+    },
+  };
+  vm.runInNewContext(readFileSync(new URL('motion.js', import.meta.url), 'utf8'), { document });
+  assert.equal(particles.length, 16);
+  assert.equal(paused, true);
+  document.hidden = false;
+  onVisibilityChange();
+  assert.equal(paused, false);
+  document.hidden = true;
+  onVisibilityChange();
+  assert.equal(paused, true);
+  assert.match(html, /class="hero-particles" aria-hidden="true"/);
+  const css = readFileSync(new URL('styles.css', import.meta.url), 'utf8');
+  assert.match(css, /prefers-reduced-motion:reduce[\s\S]*\.hero-particles \{ display:none \}/);
+  assert.match(css, /nth-child\(n\+9\) \{ display:none \}/);
+});
+
+test('Privacy pages distinguish diagnostics from saved titles in both languages', () => {
+  const chinese = readFileSync(new URL('privacy.html', import.meta.url), 'utf8');
+  const english = readFileSync(new URL('privacy-en.html', import.meta.url), 'utf8');
+  assert.match(chinese, /上述诊断事件不包含/);
+  assert.match(chinese, /文字或敏感信息/);
+  assert.match(english, /These diagnostic events do not contain/);
+  assert.match(english, /text or sensitive information from your first message/);
+  assert.match(chinese, /href="privacy-en.html"/);
+  assert.match(english, /href="privacy.html"/);
+  assert.match(english, /are not anonymous/);
+  assert.match(english, /180 days/);
+  assert.match(html, /href="privacy-en.html"/);
 });
 
 test('The page view beacon sends a path and nothing else', () => {
