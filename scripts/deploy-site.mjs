@@ -10,6 +10,7 @@
 // to the release pipeline, so they are excluded from the mirror: rsync must
 // never delete them.
 import { execFile } from 'node:child_process'
+import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -48,8 +49,21 @@ export function parseArguments(argv, env = process.env) {
   }
 }
 
+/**
+ * Every page this mirror publishes, derived from what is on disk: adding a page
+ * must not be able to ship an unverified URL, and a page that is not in this
+ * checkout is not published and so is not required to exist on the host.
+ */
+export async function localPagePaths() {
+  const entries = await readdir(path.join(projectRoot, 'website'))
+  return entries
+    .filter((name) => name.endsWith('.html'))
+    .map((name) => (name === 'index.html' ? '/' : `/${name}`))
+    .sort()
+}
+
 async function verify(url) {
-  const pages = ['/', '/privacy.html']
+  const pages = await localPagePaths()
   for (const page of pages) {
     const response = await fetch(`${url}${page}`, { redirect: 'follow' })
     if (!response.ok) throw new Error(`${url}${page} returned ${response.status}`)

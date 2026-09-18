@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
@@ -11,6 +12,7 @@ interface DeploySiteModule {
     key: string
     targetDirectory: string
   }) => string[]
+  localPagePaths: () => Promise<string[]>
   parseArguments: (argv: string[], env: Record<string, string | undefined>) => {
     source: string
     host: string | undefined
@@ -59,6 +61,26 @@ test('trailing slashes are normalised so rsync mirrors contents, not the directo
   })
   assert.ok(args.includes('/repo/website/'))
   assert.ok(args.includes('root@host:/var/www/site/'))
+})
+
+test('every page in the checkout is verified after publishing', async () => {
+  const { localPagePaths } = await module_()
+  const pages = await localPagePaths()
+
+  // index.html is the site root; every other page keeps its own name.
+  assert.ok(pages.includes('/'), 'the root page must be verified')
+  assert.ok(!pages.includes('/index.html'), 'index.html is served as /')
+  for (const page of pages) {
+    assert.match(page, /^\/[a-z0-9-]*\.html$|^\/$/)
+  }
+  // The pages on disk are exactly the pages checked, so adding one cannot ship
+  // a URL nobody verified (privacy-en.html was added that way).
+  assert.deepEqual([...pages].sort(), pages, 'the list is sorted for a stable log')
+  const onDisk = readdirSync(path.resolve('website')).filter((name) => name.endsWith('.html'))
+  assert.equal(pages.length, onDisk.length)
+  for (const name of onDisk) {
+    assert.ok(pages.includes(name === 'index.html' ? '/' : `/${name}`), `${name} must be verified`)
+  }
 })
 
 test('host and key come from the environment with flags as overrides', async () => {
