@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { DEFAULT_MODEL, applyDefaultModel, withDefaultModel } from '../src/model-default.js'
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, applyDefaultModel, withDefaultModel } from '../src/model-default.js'
 
 const directory = mkdtempSync(path.join(tmpdir(), 'mareo-model-default-'))
 test.after(() => rmSync(directory, { recursive: true, force: true }))
@@ -78,7 +78,7 @@ test('applying it creates the file, then leaves a chosen model alone', async () 
   const home = path.join(directory, 'home')
   await applyDefaultModel(home)
   const file = path.join(home, 'settings.yaml')
-  assert.equal(readFileSync(file, 'utf8'), `agent-default-model:\n  provider: ${'deepseek-official'}\n  model: ${DEFAULT_MODEL}\n`)
+  assert.equal(readFileSync(file, 'utf8'), `agent-default-model:\n  provider: ${DEFAULT_PROVIDER}\n  model: ${DEFAULT_MODEL}\n`)
 
   // A second launch changes nothing.
   await applyDefaultModel(home)
