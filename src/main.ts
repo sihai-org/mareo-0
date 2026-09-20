@@ -13,6 +13,7 @@ import {
   type AccountSession,
 } from './account.js'
 import { prepareAccountHome } from './account-home.js'
+import { applyDefaultModel } from './model-default.js'
 import { startDshRuntime, type DshRuntime } from './dsh-runtime.js'
 import { squirrelActionFor, type SquirrelAction } from './squirrel.js'
 import {
@@ -245,6 +246,9 @@ async function startMareo(): Promise<void> {
         ? process.resourcesPath
         : path.join(app.getAppPath(), '.staging')
       const dshHome = await prepareAccountHome(dshBasePath(), account.accountId)
+      // Pin the model before the engine reads its settings: the catalog's legacy
+      // default is declared text-only, and image reading depends on this.
+      await applyDefaultModel(dshHome)
       dshRuntime = await startDshRuntime({
         runtimeDirectory: path.join(runtimeDirectory, 'dsh-runtime'),
         nodeExecutable: path.join(runtimeDirectory, 'node-runtime', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
