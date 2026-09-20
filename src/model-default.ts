@@ -1,17 +1,17 @@
 /**
- * The model every account starts on.
+ * The model an account starts on, migrated once.
  *
- * Mareo pins it because image reading depends on it: the engine's catalog still
- * ships `deepseek-v4-flash` as a legacy entry declared text-only, while the
- * provider serves that same model under the official id `deepseek-flash`
- * ("DeepSeek-V41-Flash"), whose catalog entry accepts images. Both ids reach the
- * same model at the same price, so pinning the official one costs nothing and
- * unlocks image input.
+ * The engine's own default is the legacy `deepseek-v4-flash`, whose catalog
+ * entry is declared text-only, so the read tool refuses images for every account
+ * that never changed it — even though the provider serves that same model,
+ * images included, under `deepseek-flash` ("DeepSeek-V41-Flash"). Both ids bill
+ * at the Flash price, so moving the default to the official id unlocks image
+ * input without changing cost or capability.
  *
- * The setting is rewritten on every launch, which also overrides a model chosen
- * in a previous session. That is deliberate — the product decides the default
- * instead of letting it drift per machine — and relaxing it would mean skipping
- * the write when the stored value is one we did not set.
+ * This runs before the engine starts and is deliberately a one-time move: only
+ * an absent default or the legacy id is rewritten. A model the user picked
+ * afterwards — another Flash variant, Pro, anything — is left exactly as it is,
+ * so choosing a model sticks.
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -19,20 +19,18 @@ import path from 'node:path'
 export const DEFAULT_PROVIDER = 'deepseek-official'
 export const DEFAULT_MODEL = 'deepseek-flash'
 
+/** The engine's own default, which is text-only in the catalog. */
+const LEGACY_MODEL = 'deepseek-v4-flash'
+
 const SETTINGS_FILE = 'settings.yaml'
 const SETTINGS_NAMESPACE = 'agent-default-model'
-
-/** Values the block must carry, in the order we write them. */
-const REQUIRED: [string, string][] = [
-  ['provider', DEFAULT_PROVIDER],
-  ['model', DEFAULT_MODEL],
-]
+const MODEL_KEY = 'model'
 
 /**
- * Rewrites the `agent-default-model` settings block, keeping every other
- * setting (and every other key inside the block, such as `reasoningEffort`)
- * exactly as it was. Returns the input unchanged when it is already correct, so
- * a launch does not rewrite the file for nothing.
+ * Moves the stored default model off the legacy id, leaving every other setting
+ * — and every other key in the block, such as `reasoningEffort` — untouched.
+ * Returns the input unchanged when there is nothing to move, so a launch does
+ * not rewrite the file for nothing.
  */
 export function withDefaultModel(document: string): string {
   const newline = document.includes('\r\n') ? '\r\n' : '\n'
@@ -41,61 +39,52 @@ export function withDefaultModel(document: string): string {
 
   if (header === -1) {
     const body = lines.filter((line, index) => !(index === lines.length - 1 && line === ''))
-    return [...body, ...blockLines([]), ''].join(newline)
+    return [...body, `${SETTINGS_NAMESPACE}:`, `  provider: ${DEFAULT_PROVIDER}`, `  ${MODEL_KEY}: ${DEFAULT_MODEL}`, ''].join(newline)
   }
 
-  // The block runs while lines stay indented; an inline mapping (`{...}`) is a
-  // one-line block and is rewritten in block form.
+  // The block runs while lines stay indented. An inline mapping lives on the
+  // header line itself, and is edited in place rather than reformatted.
   let end = header + 1
   while (end < lines.length && /^[ \t]/.test(lines[end])) end += 1
-  const existing = lines.slice(header + 1, end)
-  const inline = lines[header].slice(`${SETTINGS_NAMESPACE}:`.length).trim()
-  const kept = [...(inline === '' ? [] : inlinePairs(inline)), ...existing.filter((line) => !isRequired(line))]
-  const block = blockLines(kept)
-  if ([lines[header], ...existing].join(newline) === block.join(newline)) return document
-  return [...lines.slice(0, header), ...block, ...lines.slice(end)].join(newline)
+
+  const inline = lines[header].slice(SETTINGS_NAMESPACE.length + 1).trim()
+  if (inline !== '') {
+    // Nothing to move unless that one line names the legacy model.
+    if (!new RegExp(`\\b${MODEL_KEY}:\\s*${LEGACY_MODEL}\\b`).test(inline)) return document
+    lines[header] = lines[header].replace(LEGACY_MODEL, DEFAULT_MODEL)
+    return lines.join(newline)
+  }
+
+  for (let index = header + 1; index < end; index += 1) {
+    const match = lines[index].match(/^([ \t]*model:\s*)(\S+)(.*)$/)
+    if (match === null) continue
+    // A model the account already uses: not ours to change.
+    if (match[2] !== LEGACY_MODEL) return document
+    lines[index] = `${match[1]}${DEFAULT_MODEL}${match[3]}`
+    return lines.join(newline)
+  }
+
+  // A block with no model line at all still means "the engine's default", which
+  // is the legacy id we are moving away from.
+  lines.splice(end, 0, `  ${MODEL_KEY}: ${DEFAULT_MODEL}`)
+  return lines.join(newline)
 }
 
-/** Writes the pinned default into an account's settings before the engine starts. */
+/** Applies the one-time move to an account's settings before the engine starts. */
 export async function applyDefaultModel(dshHome: string): Promise<void> {
   const file = path.join(dshHome, SETTINGS_FILE)
   let document = ''
   try {
     document = await readFile(file, 'utf8')
   } catch {
-    // No settings yet: the block we are about to write is the engine's defaults
-    // plus our model, which is exactly the state a first launch starts from.
+    // No settings yet: the block below is the state a first launch starts from.
   }
   const updated = withDefaultModel(document)
   if (updated === document) return
   await mkdir(dshHome, { recursive: true })
-  // Replace the file in one step: a half-written settings file would take the
-  // account's whole configuration with it.
+  // Replace in one step: a half-written settings file would take the account's
+  // whole configuration with it.
   const temporary = `${file}.mareo-tmp`
   await writeFile(temporary, updated)
   await rename(temporary, file)
-}
-
-function blockLines(kept: string[]): string[] {
-  return [`${SETTINGS_NAMESPACE}:`, ...REQUIRED.map(([key, value]) => `  ${key}: ${value}`), ...kept]
-}
-
-function isRequired(line: string): boolean {
-  return REQUIRED.some(([key]) => new RegExp(`^[ \\t]+${key}:`).test(line))
-}
-
-/** `{provider: deepseek-official, reasoningEffort: high}` → block lines. */
-function inlinePairs(inline: string): string[] {
-  const inner = inline.replace(/^\{/, '').replace(/\}$/, '')
-  return inner
-    .split(',')
-    .map((pair) => pair.trim())
-    .filter((pair) => pair !== '')
-    .map((pair) => {
-      const separator = pair.indexOf(':')
-      const key = separator === -1 ? pair : pair.slice(0, separator).trim()
-      const value = separator === -1 ? '' : pair.slice(separator + 1).trim()
-      return `  ${key}: ${value}`
-    })
-    .filter((line) => !isRequired(line))
 }

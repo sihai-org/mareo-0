@@ -8,81 +8,89 @@ import { DEFAULT_MODEL, applyDefaultModel, withDefaultModel } from '../src/model
 const directory = mkdtempSync(path.join(tmpdir(), 'mareo-model-default-'))
 test.after(() => rmSync(directory, { recursive: true, force: true }))
 
-test('the legacy text-only default is replaced by the official model id', () => {
-  const document = [
-    'ui-onboarding:',
-    '  welcomeNoticeVersion: 2026-08-13.1',
-    'agent-default-model:',
-    '  provider: deepseek-official',
-    '  model: deepseek-v4-flash',
-    '  reasoningEffort: high',
-    '',
-  ].join('\n')
-  const updated = withDefaultModel(document)
+const settings = (...lines: string[]): string => [...lines, ''].join('\n')
+
+test('the legacy text-only default is moved to the official model id', () => {
+  const updated = withDefaultModel(
+    settings(
+      'ui-onboarding:',
+      '  welcomeNoticeVersion: 2026-08-13.1',
+      'agent-default-model:',
+      '  provider: deepseek-official',
+      '  model: deepseek-v4-flash',
+      '  reasoningEffort: high',
+    ),
+  )
   assert.match(updated, /model: deepseek-flash\n/)
   assert.doesNotMatch(updated, /deepseek-v4-flash/)
-  // Everything else is left exactly as it was.
-  assert.match(updated, /ui-onboarding:\n  welcomeNoticeVersion: 2026-08-13\.1\n/)
-  assert.match(updated, /  reasoningEffort: high\n/)
+  // Every other line is left exactly where it was.
+  assert.match(updated, /ui-onboarding:\n  welcomeNoticeVersion: 2026-08-13\.1\nagent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n  reasoningEffort: high\n/)
 })
 
-test('a model chosen in a previous session is overridden too', () => {
-  const document = ['agent-default-model:', '  provider: deepseek-official', '  model: deepseek-v4-pro', ''].join('\n')
-  assert.match(withDefaultModel(document), /model: deepseek-flash/)
-  assert.doesNotMatch(withDefaultModel(document), /deepseek-v4-pro/)
+test('a model the account picked itself is never touched', () => {
+  for (const model of ['deepseek-v4-pro', 'deepseek-v4-flash-vision-exp', 'some-future-model']) {
+    const document = settings('agent-default-model:', '  provider: deepseek-official', `  model: ${model}`)
+    // Identity: the file is not rewritten at all once the account has chosen.
+    assert.equal(withDefaultModel(document), document, `${model} must be left alone`)
+  }
 })
 
-test('a document that already pins the model is returned untouched', () => {
-  const document = [
-    'locale:',
-    '  preference: zh',
-    'agent-default-model:',
-    '  provider: deepseek-official',
-    '  model: deepseek-flash',
-    '',
-  ].join('\n')
-  // Identity, not just equality: an unchanged document must not be rewritten.
+test('a document that already uses the official id is returned untouched', () => {
+  const document = settings('locale:', '  preference: zh', 'agent-default-model:', '  model: deepseek-flash')
   assert.equal(withDefaultModel(document), document)
 })
 
 test('an empty or unrelated settings file gains the block', () => {
-  const appended = withDefaultModel('locale:\n  preference: zh\n')
-  assert.match(appended, /locale:\n  preference: zh\nagent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n$/)
-
-  const empty = withDefaultModel('')
-  assert.equal(empty, 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n')
+  assert.equal(
+    withDefaultModel('locale:\n  preference: zh\n'),
+    'locale:\n  preference: zh\nagent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n',
+  )
+  assert.equal(withDefaultModel(''), 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n')
 })
 
-test('a block without a model line gets one, and keeps its other keys', () => {
-  const document = ['agent-default-model:', '  reasoningEffort: low', 'locale:', '  preference: en', ''].join('\n')
-  const updated = withDefaultModel(document)
-  assert.match(updated, /agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n  reasoningEffort: low\nlocale:/)
+test('a block with no model line gets the official id and keeps its other keys', () => {
+  const updated = withDefaultModel(settings('agent-default-model:', '  reasoningEffort: low', 'locale:', '  preference: en'))
+  assert.equal(updated, 'agent-default-model:\n  reasoningEffort: low\n  model: deepseek-flash\nlocale:\n  preference: en\n')
 })
 
-test('an inline mapping is rewritten in block form without losing its keys', () => {
-  const document = ['agent-default-model: {provider: deepseek-official, model: deepseek-v4-flash, reasoningEffort: max}', ''].join('\n')
-  const updated = withDefaultModel(document)
-  assert.match(updated, /agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n  reasoningEffort: max\n/)
+test('an inline mapping is edited in place rather than reformatted', () => {
+  const legacy = settings('agent-default-model: {provider: deepseek-official, model: deepseek-v4-flash, reasoningEffort: max}')
+  assert.equal(
+    withDefaultModel(legacy),
+    'agent-default-model: {provider: deepseek-official, model: deepseek-flash, reasoningEffort: max}\n',
+  )
+  const chosen = settings('agent-default-model: {provider: deepseek-official, model: deepseek-v4-pro}')
+  assert.equal(withDefaultModel(chosen), chosen)
+})
+
+test('a model key outside the default-model block is not mistaken for it', () => {
+  const document = settings('some-other-plugin:', '  model: deepseek-v4-flash', 'agent-default-model:', '  model: deepseek-v4-pro')
+  assert.equal(withDefaultModel(document), document)
 })
 
 test('carriage returns survive a Windows-written settings file', () => {
-  const updated = withDefaultModel(['locale:', '  preference: zh', 'agent-default-model:', '  model: deepseek-v4-flash', ''].join('\r\n'))
+  const updated = withDefaultModel(['agent-default-model:', '  model: deepseek-v4-flash', ''].join('\r\n'))
   assert.ok(updated.includes('\r\n'))
   assert.doesNotMatch(updated, /(?<!\r)\n/)
 })
 
-test('applying it creates the file, then leaves it alone once correct', async () => {
+test('applying it creates the file, then leaves a chosen model alone', async () => {
   const home = path.join(directory, 'home')
   await applyDefaultModel(home)
   const file = path.join(home, 'settings.yaml')
+  assert.equal(readFileSync(file, 'utf8'), `agent-default-model:\n  provider: ${'deepseek-official'}\n  model: ${DEFAULT_MODEL}\n`)
+
+  // A second launch changes nothing.
+  await applyDefaultModel(home)
   assert.equal(readFileSync(file, 'utf8'), `agent-default-model:\n  provider: deepseek-official\n  model: ${DEFAULT_MODEL}\n`)
 
-  // The second launch must not touch the file: mtime stays put.
-  const before = readFileSync(file, 'utf8')
-  await applyDefaultModel(home)
-  assert.equal(readFileSync(file, 'utf8'), before)
-
+  // The stored legacy id is moved once…
   writeFileSync(file, 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-flash\n')
   await applyDefaultModel(home)
   assert.match(readFileSync(file, 'utf8'), /model: deepseek-flash/)
+
+  // …and a later choice of the account's own survives every following launch.
+  writeFileSync(file, 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-pro\n')
+  await applyDefaultModel(home)
+  assert.match(readFileSync(file, 'utf8'), /model: deepseek-v4-pro/)
 })
