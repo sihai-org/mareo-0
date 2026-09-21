@@ -138,7 +138,7 @@ DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.3
 |---|---|---|
 | 字符消耗 | `usage.promptChars + completionChars` 按天 | 成本的代理指标 |
 | 单账户用量 / Top 账户占比 | `usage` 按账户聚合 | 成本集中度、异常用量排查 |
-| 精确 token 与费用 | ❌ 尚未采集 | 需要从上游响应的 `usage` 字段取 token 数（proxy 改造，未做） |
+| 精确 token 与费用 | `usage` 的 token 列（含缓存命中/未命中/思考），按官方价目表换算 | ✅ 2026-09-15 上线，见上文「成本核算」；`npm run cost` 直接出结果 |
 
 ### 版本与更新
 
@@ -150,14 +150,17 @@ DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.3
 
 ## 两道线：护栏与告警
 
-限额是**防失控的护栏，不是产品配额**，两者分开：
+限额是**防失控的护栏，不是产品配额**；产品配额是下面的额度线。三个数各管一段：
 
-| | 变量 | 默认 | 行为 |
+| | 变量 | 生产现状 | 行为 |
 |---|---|---|---|
-| 硬上限 | `DAILY_LIMIT` | 2000 | 超过后拒绝请求（会记一条 `usage.status=429`），返回中文说明"今天额度已用完，北京时间 0 点恢复" |
+| 请求数上限 | `DAILY_LIMIT` | **0（已关闭）** | 代码默认 2000。>0 时超过即拒绝（记一条 `usage.status=429`）并返回中文说明。**2026-09-21 起设为 0**：成本已由额度线按钱管住，这条护栏反而会挡住合法的重度使用者——当时 `lch` 一天 2000+ 次请求、只花 ¥11，却因为撞到请求数被拒了 385 次 |
 | 告警线 | `DAILY_WARN_LIMIT` | 500 | **只**在网关日志打一条 `[usage] <accountId> reached N requests today`，并在运营页"用量异常"一行列出该账户。不拦截任何请求 |
+| 产品配额 | `quota.*`（见下节） | `enforce`，¥10/天 | 按**真实成本**扣，用完即拒绝 |
 
-`DAILY_LIMIT=0` 表示完全不限制。改这两个值只需改 ECS 上的 `deploy/.env` 并重启容器，不需要改代码。
+改 `.env` 里的值后**必须 `docker compose up -d`**：`docker compose restart` 不会重读 `.env`，改了等于没改（重建容器会断掉当时进行中的流式响应，挑低峰做）。
+
+> 关掉请求数上限后成本依然有上限——额度线按钱扣，"每天最多花多少"由额度决定，而不是由请求数间接决定。将来若重新启用这条护栏（例如额度线临时关掉时），注意它的拒绝文案里原本写着"如需提高额度请联系我们"，有了额度机制后那句话会误导。
 
 > 现实提醒：客户端每轮请求体会携带 1–3MB 上下文（`usage.promptChars` 实测中位数约 130 万字符），所以"不限量"并不是零成本。每次请求的真实花费按 token 计（见上文成本核算），额度线就是据此设的。
 
@@ -191,7 +194,7 @@ docker compose exec -T gateway npm run config -- set quota.dailyFreeMicro 100000
 docker compose exec -T gateway npm run config -- set quota.rewardAccounts <账号id> < /dev/null
 ```
 
-键：`quota.mode`、`quota.dailyFreeMicro`、`quota.rewardAmountMicro`、`quota.dailyRewardCapMicro`、`quota.rewardMinSeconds`、`quota.rewardDailyLimit`、`quota.rewardAccounts`、`quota.rewardProvider`。金额一律微元（¥10 = `10000000`）。配置存在 `settings` 表里，下一个请求立即生效。**值写错会回落到默认值**（不会变成 0 把所有账号锁死）。
+键：`quota.mode`、`quota.dailyFreeMicro`、`quota.rewardAmountMicro`、`quota.dailyRewardCapMicro`、`quota.rewardMinSeconds`、`quota.rewardDailyLimit`、`quota.rewardAccounts`、`quota.rewardProvider`、`quota.accountAllowances`（按账号覆盖每日额度，格式 `账号id:微元`，逗号分隔——给某个账号单独放宽额度时用它，而不是改全站默认值）。金额一律微元（¥10 = `10000000`）。配置存在 `settings` 表里，下一个请求立即生效。**值写错会回落到默认值**（不会变成 0 把所有账号锁死）。
 
 > 注意：容器里跑 npm 一定要带 `< /dev/null`，否则 `docker compose exec` 会吃掉脚本自己的 stdin。
 

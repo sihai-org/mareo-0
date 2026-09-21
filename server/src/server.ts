@@ -228,10 +228,12 @@ async function handleRequest(
       // Recording the rejection must not change the rejection itself.
     }
     // The client shows this text to the user, so it says what happened and when
-    // it resets, in the language they are using.
+    // it resets, in the language they are using. It deliberately does not
+    // mention allowances: this is the runaway guard, and the product's daily
+    // allowance has its own message.
     sendJson(response, 429, {
       error: 'daily-limit-reached',
-      message: `今天的用量额度已用完，北京时间 0 点后自动恢复。如需提高额度请联系我们。`,
+      message: `今天的请求次数已达到上限，北京时间 0 点后自动恢复。`,
     })
     return
   }
