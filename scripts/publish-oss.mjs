@@ -4,7 +4,6 @@
 //   OSS_REGION=oss-cn-hangzhou OSS_BUCKET=mareo-downloads \
 //   OSS_ACCESS_KEY_ID=... OSS_ACCESS_KEY_SECRET=... \
 //   node scripts/publish-oss.mjs --prefix "" file1 file2 ...
-import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
@@ -28,10 +27,14 @@ export function objectKeyFor(file, prefix = '') {
 
 export async function uploadFiles({ configuration, files, prefix = '' }) {
   const OSS = require('ali-oss')
-  const client = new OSS(configuration)
+  // Installers are 200 MB+ and the runner sits far from the bucket, so a single
+  // PUT of a whole file exceeds the client's 60 s response timeout. Parts keep
+  // every request short, stream the file from disk instead of buffering it, and
+  // retry on their own (retryMax only reaches the part path of multipartUpload).
+  const client = new OSS({ ...configuration, timeout: 5 * 60 * 1000, retryMax: 3 })
   for (const file of files) {
     const key = objectKeyFor(file, prefix)
-    await client.put(key, await readFile(file))
+    await client.multipartUpload(key, file, { partSize: 8 * 1024 * 1024 })
     console.log(`uploaded ${key}`)
   }
 }
