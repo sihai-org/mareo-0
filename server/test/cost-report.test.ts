@@ -169,6 +169,33 @@ test('a captured request is stored with its tokens and session', () => {
   assert.equal(perSessionCost(rows, dayOf(rows[0].ts))[0].sessionId, 'sess-1')
 })
 
+test('web search is counted and priced apart from chat', () => {
+  const userId = createTokenAccount(db, '搜索用量')
+  const usage = { inputTokens: 5_000, cacheHitTokens: 250, cacheMissTokens: 4_750, outputTokens: 400, reasoningTokens: 0 }
+  for (const requestKind of ['chat', 'search'] as const) {
+    recordUsage(db, {
+      userId,
+      model: 'deepseek-v4-flash',
+      promptChars: 100,
+      completionChars: 100,
+      status: 200,
+      latencyMs: 5,
+      tokens: usage,
+      usageSource: 'provider',
+      requestKind,
+    })
+  }
+  const rows = db.prepare('SELECT * FROM usage WHERE userId = ?').all(userId) as unknown as Parameters<typeof tokensOf>[0][]
+
+  const summary = summarizeDays(rows).get(dayOf(rows[0].ts))!
+  assert.equal(summary.requests, 2)
+  assert.equal(summary.searchRequests, 1)
+  // The search line has to agree with the money total, not be a second estimate.
+  const priced = rows.map((row) => costOf(usage, 'deepseek-v4-flash', new Date(row.ts)))
+  assert.equal(summary.cost, priced[0]! + priced[1]!)
+  assert.ok(priced.includes(summary.searchCost))
+})
+
 test('an unknown model is reported instead of silently costing zero', () => {
   const userId = createTokenAccount(db, '未知模型')
   recordUsage(db, {

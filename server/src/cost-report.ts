@@ -27,6 +27,7 @@ export interface Row {
   reasoningTokens: number | null
   sessionId: string | null
   usageSource: string | null
+  requestKind: string | null
 }
 
 /** The Beijing calendar day a timestamp belongs to. */
@@ -59,6 +60,10 @@ export interface DaySummary {
   reasoningTokens: number
   inputTokens: number
   cacheHitTokens: number
+  /** Of the day's requests, the web searches — billed on the same table, but a
+   *  different shape of traffic, so it is worth seeing on its own. */
+  searchRequests: number
+  searchCost: number
   unpricedModels: string[]
 }
 
@@ -79,11 +84,15 @@ export function summarizeDays(rows: Row[]): Map<string, DaySummary> {
         reasoningTokens: 0,
         inputTokens: 0,
         cacheHitTokens: 0,
+        searchRequests: 0,
+        searchCost: 0,
         unpricedModels: [],
       })
     }
     const summary = days.get(day)!
     summary.requests += 1
+    const isSearch = row.requestKind === 'search'
+    if (isSearch) summary.searchRequests += 1
     if (row.status !== 200) continue
     const tokens = tokensOf(row)
     if (tokens === undefined) {
@@ -102,6 +111,7 @@ export function summarizeDays(rows: Row[]): Map<string, DaySummary> {
     }
     summary.pricedRequests += 1
     summary.cost += cost
+    if (isSearch) summary.searchCost += cost
     summary.outputTokens += tokens.outputTokens
     summary.reasoningTokens += tokens.reasoningTokens
     summary.inputTokens += tokens.inputTokens
@@ -214,7 +224,7 @@ function loadRows(db: GatewayDatabase): Row[] {
   return db
     .prepare(
       `SELECT userId, ts, model, status, inputTokens, cacheHitTokens, cacheMissTokens,
-              outputTokens, reasoningTokens, sessionId, usageSource
+              outputTokens, reasoningTokens, sessionId, usageSource, requestKind
        FROM usage ORDER BY id`,
     )
     .all() as unknown as Row[]
@@ -303,6 +313,9 @@ function main(): void {
         billText.padStart(10) +
         deviation.padStart(9),
     )
+    if (summary.searchRequests > 0) {
+      console.log(`              ↳ 其中搜索 ${summary.searchRequests} 次 ${money(summary.searchCost)}`)
+    }
     if (summary.unpricedModels.length > 0) {
       console.log(`              ⚠ 无价目表的模型（成本未计入）：${summary.unpricedModels.join(', ')}`)
     }

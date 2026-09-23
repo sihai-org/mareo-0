@@ -1,6 +1,12 @@
 import type { GatewayDatabase } from './db.js'
 import type { TokenUsage } from './pricing.js'
 
+/**
+ * What a model request was for. `usage.requestKind` holds these values, and the
+ * cost report splits on them.
+ */
+export type RequestKind = 'chat' | 'title' | 'search'
+
 export interface UsageRecord {
   userId: string
   model: string | null
@@ -14,8 +20,8 @@ export interface UsageRecord {
   sessionId?: string | null
   /** 'provider' when the usage block was captured, 'missing' when it was not. */
   usageSource?: 'provider' | 'missing'
-  /** 'title' for the session-title call, 'chat' for everything else. */
-  requestKind?: 'chat' | 'title'
+  /** 'title' for the session-title call, 'search' for web search, 'chat' otherwise. */
+  requestKind?: RequestKind
 }
 
 export function recordUsage(db: GatewayDatabase, record: UsageRecord): void {

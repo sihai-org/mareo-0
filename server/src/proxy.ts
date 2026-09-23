@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
 import type { TokenUsage } from './pricing.js'
+import type { RequestKind } from './usage.js'
 
 export interface ProxyConfig {
   upstreamBaseUrl: string
@@ -87,8 +88,8 @@ export interface ProxyOutcome {
   tokens?: TokenUsage
   /** Harness session id, when the client sent one. */
   sessionId?: string | null
-  /** 'title' for the session-title call, 'chat' for everything else. */
-  requestKind: 'chat' | 'title'
+  /** 'title' for the session-title call, 'search' for web search, 'chat' otherwise. */
+  requestKind: RequestKind
   /** The generated title, for title calls only. */
   titleText?: string
 }
@@ -229,7 +230,11 @@ export async function proxyRequest(
   const model = modelFromBody(body)
   const sessionHeader = request.headers['x-deepseek-harness-session-id']
   const sessionId = typeof sessionHeader === 'string' && sessionHeader !== '' ? sessionHeader : null
-  const requestKind: 'chat' | 'title' = isTitleRequest(body) ? 'title' : 'chat'
+  // The web search provider talks to the Anthropic-compatible Messages API, which
+  // this gateway forwards on the same path; nothing else uses it, and search has
+  // its own price profile, so it gets its own kind rather than hiding in `chat`.
+  const requestKind: RequestKind =
+    request.url?.startsWith('/anthropic/') === true ? 'search' : isTitleRequest(body) ? 'title' : 'chat'
 
   const upstreamUrl = new URL(request.url ?? '/', withTrailingSlash(config.upstreamBaseUrl)).toString()
   const forwardedHeaders: Record<string, string> = { authorization: `Bearer ${config.apiKey}` }

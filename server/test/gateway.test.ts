@@ -121,6 +121,41 @@ test('proxies a chat completion and records usage with the owner and model', asy
   assert.equal(countRequestsSince(db, userId, startOfDay()), 1)
 })
 
+/** The request kind recorded for an account's most recent model request. */
+function lastRequestKind(userId: string): string | null {
+  const row = db.prepare('SELECT requestKind FROM usage WHERE userId = ? ORDER BY id DESC LIMIT 1').get(userId) as
+    | { requestKind: string | null }
+    | undefined
+  return row?.requestKind ?? null
+}
+
+test('separates web search from chat in the accounting', async () => {
+  const userId = findTokenOwner(db, hashToken(token))?.userId
+  assert.ok(userId !== undefined)
+
+  await fetch(`${gatewayUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: 'hi' }] }),
+  })
+  assert.equal(lastRequestKind(userId), 'chat')
+
+  // Exactly what the bundled search provider sends: the Anthropic-compatible
+  // Messages path, carrying the search tool declaration.
+  const search = await fetch(`${gatewayUrl}/anthropic/v1/messages`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'deepseek-v4-flash',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Perform a web search for the query: 上海天气' }] }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+    }),
+  })
+  assert.equal(search.status, 200)
+  assert.equal(lastRequestKind(userId), 'search')
+})
+
 test('streams event-stream responses through', async () => {
   const response = await fetch(`${gatewayUrl}/stream`, {
     method: 'POST',

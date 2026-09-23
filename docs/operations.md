@@ -58,11 +58,12 @@ crontab -e
 
 ### 采集了什么（网关侧，2026-09-15 起）
 
-`usage` 表按请求记录：`inputTokens`、`cacheHitTokens`、`cacheMissTokens`、`outputTokens`、`reasoningTokens`、`sessionId`（来自 `x-deepseek-harness-session-id` 头）、`usageSource`。
+`usage` 表按请求记录：`inputTokens`、`cacheHitTokens`、`cacheMissTokens`、`outputTokens`、`reasoningTokens`、`sessionId`（来自 `x-deepseek-harness-session-id` 头）、`usageSource`、`requestKind`。
 
 - `usageSource='provider'`：usage 已采集（正常情况）；
 - `usageSource='missing'`：200 但没拿到 usage（流被中断等）——**记为缺失而不是 0**，绝不能让它看起来免费；
 - `usageSource IS NULL`：2026-09-15 之前的历史行，**无法计价**，报表会单独标注且不对账。
+- `requestKind='search'`：客户端内置的联网搜索。它走 Anthropic 兼容端点（`/anthropic/v1/messages`），响应里的 `input_tokens` **不含**缓存计数——网关按 `input + cache_read + cache_creation` 还原总提示，否则每次搜索都会按未命中计价。搜索与对话同一本账、同一个每日额度，报表在每个北京日下用一行 `↳ 其中搜索 N 次 ¥X` 单列（一次搜索约 ¥0.007 低峰 / ¥0.013 高峰，量级与一次普通对话相当）。
 
 ### 单价与时段
 
@@ -188,19 +189,21 @@ DB_PATH=/path/to/mareo.db npm run --prefix server cost -- --bill 2026-09-16=12.3
 
 ```sh
 cd /srv/mareo/server/deploy
-docker compose exec -T gateway npm run config < /dev/null            # 列出全部键与当前值
-docker compose exec -T gateway npm run config -- set quota.mode shadow < /dev/null
-docker compose exec -T gateway npm run config -- set quota.dailyFreeMicro 10000000 < /dev/null
-docker compose exec -T gateway npm run config -- set quota.rewardAccounts <账号id> < /dev/null
+docker compose exec -T gateway node dist/src/config-cli.js < /dev/null            # 列出全部键与当前值
+docker compose exec -T gateway node dist/src/config-cli.js set quota.mode shadow < /dev/null
+docker compose exec -T gateway node dist/src/config-cli.js set quota.dailyFreeMicro 10000000 < /dev/null
+docker compose exec -T gateway node dist/src/config-cli.js set quota.rewardAccounts <账号id> < /dev/null
 ```
 
 键：`quota.mode`、`quota.dailyFreeMicro`、`quota.rewardAmountMicro`、`quota.dailyRewardCapMicro`、`quota.rewardMinSeconds`、`quota.rewardDailyLimit`、`quota.rewardAccounts`、`quota.rewardProvider`、`quota.accountAllowances`（按账号覆盖每日额度，格式 `账号id:微元`，逗号分隔——给某个账号单独放宽额度时用它，而不是改全站默认值）。金额一律微元（¥10 = `10000000`）。配置存在 `settings` 表里，下一个请求立即生效。**值写错会回落到默认值**（不会变成 0 把所有账号锁死）。
 
-> 注意：容器里跑 npm 一定要带 `< /dev/null`，否则 `docker compose exec` 会吃掉脚本自己的 stdin。
+> 容器内一律直接调 `node dist/src/<脚本>.js`（`config-cli`、`cost-report`、`metrics`）：镜像只装了构建产物，`npm prune --omit=dev` 已经删掉 `tsc`，所以 `npm run config` / `cost` / `metrics` 这些会先 `npm run build` 的脚本在容器里**必然失败**——它们是给本地开发用的。
+>
+> 注意：容器里跑命令一定要带 `< /dev/null`，否则 `docker compose exec` 会吃掉脚本自己的 stdin。
 
 **影子观察怎么读**
 
-`npm run cost` 的「额度影响」区块直接给出结论，不需要额外埋点——它用当天真实的计价行重算"如果当时就限量会怎样"：
+成本报表的「额度影响」区块直接给出结论，不需要额外埋点——它用当天真实的计价行重算"如果当时就限量会怎样"：
 
 ```
 阈值        会被挡账号   会被挡请求   占总请求   超出阈值的成本
@@ -235,7 +238,7 @@ docker compose exec -T gateway sh -c '
 
 ## 节奏
 
-- **每天**：`npm run --prefix server metrics` 看五个数——今日活跃、模型成功率与 429、**今日新增账户/安装**、下载次数、字符消耗。
+- **每天**：在容器里跑 `node dist/src/metrics.js`（完整形式见 [`metrics.md`](metrics.md)）看五个数——今日活跃、模型成功率与 429、**今日新增账户/安装**、下载次数、字符消耗。
 - **每周**：漏斗转化、同期群留存、成本 Top 账户、版本分布；并逐个新用户核对启动/登录/首次任务。
 - **每月**：成本与定价、Windows 签名决策、是否推进 Phase 2 自动更新。
 
