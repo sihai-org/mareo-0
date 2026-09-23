@@ -57,6 +57,28 @@ test('reads the token block the provider sends on every streaming response', () 
   })
 })
 
+test('reads the Anthropic-shaped usage the web search provider sends', () => {
+  // Frame order as captured from the provider: `message_start` carries the
+  // prompt, `message_delta` the final output count. `input_tokens` excludes
+  // both cache counts, so the total prompt is the sum of the parts.
+  const tail = [
+    'event: message_start',
+    'data: {"type":"message_start","message":{"id":"1","usage":{"input_tokens":33,"cache_creation_input_tokens":10,"cache_read_input_tokens":900,"output_tokens":1}}}',
+    '',
+    'event: message_delta',
+    'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":33,"cache_creation_input_tokens":10,"cache_read_input_tokens":900,"output_tokens":120}}',
+    '',
+  ].join('\n')
+
+  assert.deepEqual(usageFromResponseText(tail), {
+    inputTokens: 943, // 33 uncached + 900 read from cache + 10 written
+    cacheHitTokens: 900,
+    cacheMissTokens: 43,
+    outputTokens: 120,
+    reasoningTokens: 0,
+  })
+})
+
 test('reads a non-streaming JSON body and the older cached_tokens shape', () => {
   const body = JSON.stringify({
     id: '1',

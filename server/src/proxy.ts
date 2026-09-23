@@ -147,6 +147,25 @@ export function usageFromResponseText(text: string): TokenUsage | undefined {
     return undefined
   }
 
+  // Anthropic-compatible responses — the shape the bundled web search uses —
+  // report the cache counts *outside* `input_tokens`, so the total prompt is
+  // the sum of the parts. Reading them as OpenAI fields would treat every
+  // prompt token as a cache miss and bill it at ~50× the right price.
+  const anthropicInput = numberFrom(raw, 'input_tokens')
+  const cacheRead = numberFrom(raw, 'cache_read_input_tokens')
+  const cacheWrite = numberFrom(raw, 'cache_creation_input_tokens')
+  const anthropicOutput = numberFrom(raw, 'output_tokens')
+  if (anthropicInput > 0 || cacheRead > 0 || cacheWrite > 0 || anthropicOutput > 0) {
+    return {
+      inputTokens: anthropicInput + cacheRead + cacheWrite,
+      cacheHitTokens: cacheRead,
+      // DeepSeek bills a cache write as a miss: it has no separate write price.
+      cacheMissTokens: anthropicInput + cacheWrite,
+      outputTokens: anthropicOutput,
+      reasoningTokens: 0,
+    }
+  }
+
   const inputTokens = numberFrom(raw, 'prompt_tokens')
   const outputTokens = numberFrom(raw, 'completion_tokens')
   const cacheHitTokens = numberFrom(raw, 'prompt_cache_hit_tokens')
